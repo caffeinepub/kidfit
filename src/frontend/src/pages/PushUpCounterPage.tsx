@@ -20,52 +20,94 @@ import { useLogPushups } from "../hooks/useQueries";
 type PosePhase = "up" | "down" | "unknown";
 
 interface PosePoint {
+  x: number;
   y: number;
   score: number;
 }
 
+/**
+ * Calculate the angle (in degrees) at the elbow joint.
+ * Uses vectors from elbow → shoulder and elbow → wrist.
+ */
+function calcElbowAngle(
+  shoulder: PosePoint,
+  elbow: PosePoint,
+  wrist: PosePoint,
+): number {
+  const v1 = { x: shoulder.x - elbow.x, y: shoulder.y - elbow.y };
+  const v2 = { x: wrist.x - elbow.x, y: wrist.y - elbow.y };
+  const dot = v1.x * v2.x + v1.y * v2.y;
+  const mag1 = Math.sqrt(v1.x * v1.x + v1.y * v1.y);
+  const mag2 = Math.sqrt(v2.x * v2.x + v2.y * v2.y);
+  if (mag1 < 1e-6 || mag2 < 1e-6) return 90; // fallback
+  const cosAngle = Math.max(-1, Math.min(1, dot / (mag1 * mag2)));
+  return (Math.acos(cosAngle) * 180) / Math.PI;
+}
+
+/**
+ * Front-camera-optimised push-up phase detection.
+ *
+ * MoveNet keypoint indices:
+ *   5 = left shoulder,  6 = right shoulder
+ *   7 = left elbow,     8 = right elbow
+ *   9 = left wrist,    10 = right wrist
+ *
+ * UP   → elbow angle > 150° (arms extended)
+ * DOWN → elbow angle < 100° (arms bent)
+ *
+ * Falls back to elbow-Y-vs-shoulder-Y comparison when confidence is low.
+ */
 function estimatePushupPhase(keypoints: PosePoint[]): PosePhase {
-  // We use nose (idx 0), left shoulder (idx 5), right shoulder (idx 6),
-  // left hip (idx 11), right hip (idx 12)
-  const nose = keypoints[0];
+  const minScore = 0.25;
+
   const lShoulder = keypoints[5];
   const rShoulder = keypoints[6];
-  const lHip = keypoints[11];
-  const rHip = keypoints[12];
+  const lElbow = keypoints[7];
+  const rElbow = keypoints[8];
+  const lWrist = keypoints[9];
+  const rWrist = keypoints[10];
 
-  const minScore = 0.35;
-  if (
-    !nose ||
-    !lShoulder ||
-    !rShoulder ||
-    !lHip ||
-    !rHip ||
-    nose.score < minScore ||
-    lShoulder.score < minScore ||
-    rShoulder.score < minScore
-  ) {
+  if (!lShoulder || !rShoulder || !lElbow || !rElbow || !lWrist || !rWrist) {
     return "unknown";
   }
 
-  const shoulderY = (lShoulder.y + rShoulder.y) / 2;
-  const hipY = (lHip.y + rHip.y) / 2;
-  const noseY = nose.y;
+  const lHighConf =
+    lShoulder.score >= minScore &&
+    lElbow.score >= minScore &&
+    lWrist.score >= minScore;
+  const rHighConf =
+    rShoulder.score >= minScore &&
+    rElbow.score >= minScore &&
+    rWrist.score >= minScore;
 
-  // Body height reference
-  const bodyHeight = Math.abs(hipY - noseY);
-  if (bodyHeight < 50) return "unknown";
+  // ── Primary: elbow angle method ──────────────────────────────────────────
+  if (lHighConf || rHighConf) {
+    const angles: number[] = [];
+    if (lHighConf) angles.push(calcElbowAngle(lShoulder, lElbow, lWrist));
+    if (rHighConf) angles.push(calcElbowAngle(rShoulder, rElbow, rWrist));
+    const avgAngle = angles.reduce((s, a) => s + a, 0) / angles.length;
 
-  // Normalized shoulder position relative to body
-  const relShoulder = (shoulderY - noseY) / bodyHeight;
-
-  // When in "up" position, shoulders are far from nose (body extended)
-  // When in "down" position, shoulders are close to nose (body lowered)
-  if (relShoulder > 0.5) {
-    return "up";
+    if (avgAngle > 150) return "up";
+    if (avgAngle < 100) return "down";
+    return "unknown";
   }
-  if (relShoulder < 0.35) {
-    return "down";
+
+  // ── Fallback: elbow Y vs shoulder Y ──────────────────────────────────────
+  // In pixel coords, higher Y = lower on screen.
+  // When arms are bent (down), elbows drop well below shoulder level.
+  const elbowYConf =
+    lElbow.score >= minScore * 0.6 && rElbow.score >= minScore * 0.6;
+  const shoulderYConf =
+    lShoulder.score >= minScore * 0.6 && rShoulder.score >= minScore * 0.6;
+
+  if (elbowYConf && shoulderYConf) {
+    const avgElbowY = (lElbow.y + rElbow.y) / 2;
+    const avgShoulderY = (lShoulder.y + rShoulder.y) / 2;
+    const diff = avgElbowY - avgShoulderY; // positive → elbows below shoulders
+    if (diff > 40) return "down";
+    if (diff < -10) return "up";
   }
+
   return "unknown";
 }
 
@@ -405,8 +447,8 @@ export default function PushUpCounterPage() {
             </h3>
             <ul className="space-y-1 text-xs text-muted-foreground font-body">
               <li>
-                • Place your phone/laptop where the camera can see your full
-                upper body
+                • Position your phone/laptop in front of you so the camera can
+                see your upper body and arms
               </li>
               <li>• Start in the "up" position (arms extended)</li>
               <li>• The AI counts reps when you go down and come back up</li>
