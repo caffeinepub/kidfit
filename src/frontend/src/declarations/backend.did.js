@@ -8,6 +8,15 @@
 
 import { IDL } from '@icp-sdk/core/candid';
 
+export const DietEntry = IDL.Record({
+  'id' : IDL.Nat,
+  'fat' : IDL.Nat,
+  'carbs' : IDL.Nat,
+  'calories' : IDL.Nat,
+  'name' : IDL.Text,
+  'category' : IDL.Text,
+  'protein' : IDL.Nat,
+});
 export const Difficulty = IDL.Variant({
   'easy' : IDL.Null,
   'hard' : IDL.Null,
@@ -90,6 +99,7 @@ export const TransformationOutput = IDL.Record({
 
 export const idlService = IDL.Service({
   '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
+  'addDietEntry' : IDL.Func([DietEntry], [], []),
   'addExercise' : IDL.Func([Exercise], [], []),
   'addExerciseCategory' : IDL.Func([ExerciseCategory], [], []),
   'addXp' : IDL.Func([IDL.Principal, IDL.Nat], [], []),
@@ -110,6 +120,12 @@ export const idlService = IDL.Service({
   'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
   'getCategories' : IDL.Func([], [IDL.Vec(ExerciseCategory)], ['query']),
+  'getDietEntries' : IDL.Func([], [IDL.Vec(DietEntry)], ['query']),
+  'getDietEntriesByCategory' : IDL.Func(
+      [IDL.Text],
+      [IDL.Vec(DietEntry)],
+      ['query'],
+    ),
   'getExercisesByCategory' : IDL.Func(
       [IDL.Text],
       [IDL.Vec(Exercise)],
@@ -146,6 +162,15 @@ export const idlService = IDL.Service({
 export const idlInitArgs = [];
 
 export const idlFactory = ({ IDL }) => {
+  const DietEntry = IDL.Record({
+    'id' : IDL.Nat,
+    'fat' : IDL.Nat,
+    'carbs' : IDL.Nat,
+    'calories' : IDL.Nat,
+    'name' : IDL.Text,
+    'category' : IDL.Text,
+    'protein' : IDL.Nat,
+  });
   const Difficulty = IDL.Variant({
     'easy' : IDL.Null,
     'hard' : IDL.Null,
@@ -225,6 +250,7 @@ export const idlFactory = ({ IDL }) => {
   
   return IDL.Service({
     '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
+    'addDietEntry' : IDL.Func([DietEntry], [], []),
     'addExercise' : IDL.Func([Exercise], [], []),
     'addExerciseCategory' : IDL.Func([ExerciseCategory], [], []),
     'addXp' : IDL.Func([IDL.Principal, IDL.Nat], [], []),
@@ -245,6 +271,12 @@ export const idlFactory = ({ IDL }) => {
     'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
     'getCategories' : IDL.Func([], [IDL.Vec(ExerciseCategory)], ['query']),
+    'getDietEntries' : IDL.Func([], [IDL.Vec(DietEntry)], ['query']),
+    'getDietEntriesByCategory' : IDL.Func(
+        [IDL.Text],
+        [IDL.Vec(DietEntry)],
+        ['query'],
+      ),
     'getExercisesByCategory' : IDL.Func(
         [IDL.Text],
         [IDL.Vec(Exercise)],

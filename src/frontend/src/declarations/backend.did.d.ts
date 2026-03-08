@@ -10,6 +10,15 @@ import type { ActorMethod } from '@icp-sdk/core/agent';
 import type { IDL } from '@icp-sdk/core/candid';
 import type { Principal } from '@icp-sdk/core/principal';
 
+export interface DietEntry {
+  'id' : bigint,
+  'fat' : bigint,
+  'carbs' : bigint,
+  'calories' : bigint,
+  'name' : string,
+  'category' : string,
+  'protein' : bigint,
+}
 export type Difficulty = { 'easy' : null } |
   { 'hard' : null } |
   { 'medium' : null };
@@ -76,6 +85,7 @@ export interface http_request_result {
 }
 export interface _SERVICE {
   '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
+  'addDietEntry' : ActorMethod<[DietEntry], undefined>,
   'addExercise' : ActorMethod<[Exercise], undefined>,
   'addExerciseCategory' : ActorMethod<[ExerciseCategory], undefined>,
   'addXp' : ActorMethod<[Principal, bigint], undefined>,
@@ -94,6 +104,8 @@ export interface _SERVICE {
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
   'getCategories' : ActorMethod<[], Array<ExerciseCategory>>,
+  'getDietEntries' : ActorMethod<[], Array<DietEntry>>,
+  'getDietEntriesByCategory' : ActorMethod<[string], Array<DietEntry>>,
   'getExercisesByCategory' : ActorMethod<[string], Array<Exercise>>,
   'getProfile' : ActorMethod<[Principal], UserProfile>,
   'getStripeSessionStatus' : ActorMethod<[string], StripeSessionStatus>,

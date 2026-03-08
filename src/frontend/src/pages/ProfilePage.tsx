@@ -7,17 +7,18 @@ import {
   Eye,
   EyeOff,
   LogOut,
+  Settings,
   Shield,
   Star,
   Zap,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
-import { Tier } from "../backend.d";
+import { Tier, UserRole } from "../backend.d";
 import RewardedAdModal from "../components/RewardedAdModal";
 import TierBadge from "../components/TierBadge";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
-import { useUserProfile } from "../hooks/useQueries";
+import { useUserProfile, useUserRole } from "../hooks/useQueries";
 import {
   TIERS,
   getTierFromXp,
@@ -27,11 +28,27 @@ import {
   levelFromXp,
 } from "../lib/xp";
 
-export default function ProfilePage() {
+type Page =
+  | "home"
+  | "exercises"
+  | "pushups"
+  | "tournaments"
+  | "profile"
+  | "battle"
+  | "diet"
+  | "admin";
+
+interface ProfilePageProps {
+  onNavigate?: (page: Page) => void;
+}
+
+export default function ProfilePage({ onNavigate }: ProfilePageProps) {
   const [profileUnlocked, setProfileUnlocked] = useState(false);
   const [adModalOpen, setAdModalOpen] = useState(false);
   const { data: profile, isLoading } = useUserProfile();
   const { clear, identity } = useInternetIdentity();
+  const { data: roleData } = useUserRole();
+  const isAdmin = roleData === UserRole.admin;
 
   const handleViewProfile = () => {
     setAdModalOpen(true);
@@ -84,17 +101,31 @@ export default function ProfilePage() {
             Your stats & achievements
           </p>
         </div>
-        {identity && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => clear()}
-            className="border-border text-muted-foreground hover:text-foreground font-body gap-1"
-          >
-            <LogOut className="w-3 h-3" />
-            Logout
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {isAdmin && (
+            <Button
+              data-ocid="profile.admin.button"
+              variant="outline"
+              size="sm"
+              onClick={() => onNavigate?.("admin")}
+              className="border-chart-4/40 text-chart-4 hover:text-chart-4 font-body gap-1"
+            >
+              <Settings className="w-3 h-3" />
+              Admin
+            </Button>
+          )}
+          {identity && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => clear()}
+              className="border-border text-muted-foreground hover:text-foreground font-body gap-1"
+            >
+              <LogOut className="w-3 h-3" />
+              Logout
+            </Button>
+          )}
+        </div>
       </header>
 
       <main className="flex-1 px-4 space-y-4">

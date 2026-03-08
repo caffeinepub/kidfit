@@ -1,4 +1,3 @@
-import Map "mo:core/Map";
 import Array "mo:core/Array";
 import Iter "mo:core/Iter";
 import List "mo:core/List";
@@ -8,14 +7,15 @@ import Nat "mo:core/Nat";
 import Int "mo:core/Int";
 import Principal "mo:core/Principal";
 import Order "mo:core/Order";
-import Runtime "mo:core/Runtime";
+import Map "mo:core/Map";
 import Authorization "authorization/access-control";
 import MixinAuthorization "authorization/MixinAuthorization";
 import Stripe "stripe/stripe";
 import OutCall "http-outcalls/outcall";
+import Runtime "mo:core/Runtime";
 
 actor {
-  // Enum Definitions
+  // Enums
   type Tier = { #bronze; #silver; #gold; #platinum; #diamond };
   type Difficulty = { #easy; #medium; #hard };
 
@@ -65,6 +65,16 @@ actor {
     timestamp : Time.Time;
   };
 
+  public type DietEntry = {
+    id : Nat;
+    name : Text;
+    category : Text;
+    calories : Nat;
+    protein : Nat;
+    carbs : Nat;
+    fat : Nat;
+  };
+
   // Persistent State
   let profiles = Map.empty<Principal, UserProfile>();
   let exerciseCategories = Map.empty<Text, ExerciseCategory>();
@@ -73,8 +83,10 @@ actor {
   let tournaments = Map.empty<Nat, Tournament>();
   let tournamentEntries = Map.empty<Nat, List.List<TournamentEntry>>();
   let adViews = Map.empty<Principal, List.List<Time.Time>>();
+  let dietEntries = Map.empty<Nat, DietEntry>();
   var nextExerciseId = 0;
   var nextTournamentId = 0;
+  var nextDietEntryId = 0;
 
   // Authorization and Stripe Config
   let accessControlState = Authorization.initState();
@@ -100,13 +112,14 @@ actor {
       adFreeUntil = 0;
     };
     profiles.add(caller, profile);
+    Authorization.assignRole(accessControlState, caller, caller, #user);
   };
 
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
-    if (not (Authorization.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can view profiles");
+    switch (caller.isAnonymous()) {
+      case (true) { null };
+      case (false) { profiles.get(caller) };
     };
-    profiles.get(caller);
   };
 
   public shared ({ caller }) func saveCallerUserProfile(profile : UserProfile) : async () {
@@ -383,6 +396,24 @@ actor {
     // Add ad-free rewards for paid tournaments here if needed
   };
 
+  // *** Diet Management ***
+  public shared ({ caller }) func addDietEntry(entry : DietEntry) : async () {
+    if (not (Authorization.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can add diet entries");
+    };
+    dietEntries.add(nextDietEntryId, entry);
+    nextDietEntryId += 1;
+  };
+
+  public query ({ caller }) func getDietEntries() : async [DietEntry] {
+    dietEntries.values().toArray();
+  };
+
+  public query ({ caller }) func getDietEntriesByCategory(category : Text) : async [DietEntry] {
+    let allEntries = dietEntries.values().toArray();
+    allEntries.filter(func(entry) { entry.category == category });
+  };
+
   // *** Stripe Integration ***
   public query ({ caller }) func isStripeConfigured() : async Bool {
     stripeConfig != null;
@@ -405,6 +436,9 @@ actor {
   };
 
   public shared ({ caller }) func createCheckoutSession(items : [Stripe.ShoppingItem], successUrl : Text, cancelUrl : Text) : async Text {
+    if (not (Authorization.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can create checkout sessions");
+    };
     switch (stripeConfig) {
       case (null) { Runtime.trap("Stripe not configured") };
       case (?config) {

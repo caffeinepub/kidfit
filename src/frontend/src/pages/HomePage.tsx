@@ -4,6 +4,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dumbbell, Flame, Star, Target, Trophy, User } from "lucide-react";
 import { motion } from "motion/react";
 import { Tier } from "../backend.d";
+import DailyMissionCard from "../components/DailyMissionCard";
 import TierBadge from "../components/TierBadge";
 import { useUserProfile } from "../hooks/useQueries";
 import {
@@ -13,7 +14,15 @@ import {
   getXpToNextTier,
 } from "../lib/xp";
 
-type Page = "home" | "exercises" | "pushups" | "tournaments" | "profile";
+type Page =
+  | "home"
+  | "exercises"
+  | "pushups"
+  | "tournaments"
+  | "profile"
+  | "battle"
+  | "diet"
+  | "admin";
 
 interface HomePageProps {
   onNavigate: (page: Page) => void;
@@ -267,6 +276,9 @@ export default function HomePage({ onNavigate }: HomePageProps) {
             })}
           </div>
         </motion.div>
+
+        {/* Daily Mission */}
+        <DailyMissionCard username={profile?.username ?? "athlete"} />
 
         {/* Motivational Banner */}
         <motion.div

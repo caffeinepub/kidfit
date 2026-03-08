@@ -4,14 +4,25 @@ import AdBanner from "./components/AdBanner";
 import BottomNav from "./components/BottomNav";
 import { useInternetIdentity } from "./hooks/useInternetIdentity";
 import { useUserProfile } from "./hooks/useQueries";
+import AdminPage from "./pages/AdminPage";
 import AuthPage from "./pages/AuthPage";
+import BattlePage from "./pages/BattlePage";
+import DietPage from "./pages/DietPage";
 import ExercisesPage from "./pages/ExercisesPage";
 import HomePage from "./pages/HomePage";
 import ProfilePage from "./pages/ProfilePage";
 import PushUpCounterPage from "./pages/PushUpCounterPage";
 import TournamentsPage from "./pages/TournamentsPage";
 
-type Page = "home" | "exercises" | "pushups" | "tournaments" | "profile";
+type Page =
+  | "home"
+  | "exercises"
+  | "pushups"
+  | "tournaments"
+  | "profile"
+  | "battle"
+  | "diet"
+  | "admin";
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState<Page>("home");
@@ -71,7 +82,13 @@ export default function App() {
       case "tournaments":
         return <TournamentsPage />;
       case "profile":
-        return <ProfilePage />;
+        return <ProfilePage onNavigate={setCurrentPage} />;
+      case "battle":
+        return <BattlePage />;
+      case "diet":
+        return <DietPage />;
+      case "admin":
+        return <AdminPage />;
       default:
         return <HomePage onNavigate={setCurrentPage} />;
     }

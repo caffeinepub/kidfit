@@ -254,3 +254,65 @@ export function useUserRole() {
     enabled: !!actor && !isFetching,
   });
 }
+
+// ===== ADMIN MUTATIONS =====
+export function useAddExerciseCategory() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (category: import("../backend.d").ExerciseCategory) => {
+      if (!actor) throw new Error("No actor");
+      await actor.addExerciseCategory(category);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+    },
+  });
+}
+
+export function useAddExercise() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (exercise: import("../backend.d").Exercise) => {
+      if (!actor) throw new Error("No actor");
+      await actor.addExercise(exercise);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["exercises"] });
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+    },
+  });
+}
+
+export function useCreateTournament() {
+  const { actor } = useActor();
+  return useMutation({
+    mutationFn: async ({
+      name,
+      startDate,
+      endDate,
+      entryFee,
+      isPaid,
+    }: {
+      name: string;
+      startDate: bigint;
+      endDate: bigint;
+      entryFee: bigint;
+      isPaid: boolean;
+    }) => {
+      if (!actor) throw new Error("No actor");
+      return actor.createTournament(name, startDate, endDate, entryFee, isPaid);
+    },
+  });
+}
+
+export function useFinalizeTournament() {
+  const { actor } = useActor();
+  return useMutation({
+    mutationFn: async (tournamentId: bigint) => {
+      if (!actor) throw new Error("No actor");
+      await actor.finalizeTournament(tournamentId);
+    },
+  });
+}

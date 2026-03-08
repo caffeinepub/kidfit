@@ -7,6 +7,7 @@ import {
   CheckCircle,
   RefreshCw,
   RotateCcw,
+  Share2,
   Target,
   Zap,
 } from "lucide-react";
@@ -14,7 +15,9 @@ import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useCamera } from "../camera/useCamera";
-import { useLogPushups } from "../hooks/useQueries";
+import ShareResultModal from "../components/ShareResultModal";
+import { useLogPushups, useUserProfile } from "../hooks/useQueries";
+import { getTierFromXp } from "../lib/xp";
 
 // ===== Push-up detection state machine =====
 type PosePhase = "up" | "down" | "unknown";
@@ -134,6 +137,8 @@ export default function PushUpCounterPage() {
   const [sessionStarted, setSessionStarted] = useState(false);
   const [detectorError, setDetectorError] = useState<string | null>(null);
   const [countKey, setCountKey] = useState(0);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [lastSessionCount, setLastSessionCount] = useState(0);
 
   const detectorRef = useRef<any>(null);
   const rafRef = useRef<number | null>(null);
@@ -141,6 +146,10 @@ export default function PushUpCounterPage() {
   const lastTransitionRef = useRef<number>(0);
 
   const { mutateAsync: logPushups, isPending: isLogging } = useLogPushups();
+  const { data: profile } = useUserProfile();
+  const username = profile?.username ?? "Athlete";
+  const xp = profile ? Number(profile.xp) : 0;
+  const tierInfo = getTierFromXp(xp);
 
   // Load TensorFlow and MoveNet via CDN scripts (avoids bundler issues)
   useEffect(() => {
@@ -293,6 +302,8 @@ export default function PushUpCounterPage() {
     try {
       await logPushups(BigInt(count));
       toast.success(`💪 ${count} push-ups logged! +${count * 10} XP earned!`);
+      setLastSessionCount(count);
+      setShowShareModal(true);
     } catch {
       toast.error("Could not save session. Please try again.");
     }
@@ -535,7 +546,28 @@ export default function PushUpCounterPage() {
             </div>
           </div>
         )}
+
+        {/* Share button (shown after session) */}
+        {!sessionStarted && lastSessionCount > 0 && (
+          <Button
+            variant="outline"
+            onClick={() => setShowShareModal(true)}
+            className="w-full h-12 border-border font-display font-bold gap-2"
+          >
+            <Share2 className="w-4 h-4" />
+            Share My Result
+          </Button>
+        )}
       </main>
+
+      <ShareResultModal
+        open={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        repCount={lastSessionCount}
+        xpEarned={lastSessionCount * 10}
+        username={username}
+        tier={tierInfo.label}
+      />
     </div>
   );
 }

@@ -133,6 +133,15 @@ export interface TransformationInput {
     context: Uint8Array;
     response: http_request_result;
 }
+export interface DietEntry {
+    id: bigint;
+    fat: bigint;
+    carbs: bigint;
+    calories: bigint;
+    name: string;
+    category: string;
+    protein: bigint;
+}
 export type StripeSessionStatus = {
     __kind__: "completed";
     completed: {
@@ -175,6 +184,7 @@ export enum UserRole {
 }
 export interface backendInterface {
     _initializeAccessControlWithSecret(userSecret: string): Promise<void>;
+    addDietEntry(entry: DietEntry): Promise<void>;
     addExercise(exercise: Exercise): Promise<void>;
     addExerciseCategory(category: ExerciseCategory): Promise<void>;
     addXp(user: Principal, xp: bigint): Promise<void>;
@@ -187,6 +197,8 @@ export interface backendInterface {
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
     getCategories(): Promise<Array<ExerciseCategory>>;
+    getDietEntries(): Promise<Array<DietEntry>>;
+    getDietEntriesByCategory(category: string): Promise<Array<DietEntry>>;
     getExercisesByCategory(category: string): Promise<Array<Exercise>>;
     getProfile(user: Principal): Promise<UserProfile>;
     getStripeSessionStatus(sessionId: string): Promise<StripeSessionStatus>;
@@ -217,6 +229,20 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor._initializeAccessControlWithSecret(arg0);
+            return result;
+        }
+    }
+    async addDietEntry(arg0: DietEntry): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.addDietEntry(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.addDietEntry(arg0);
             return result;
         }
     }
@@ -385,6 +411,34 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.getCategories();
+            return result;
+        }
+    }
+    async getDietEntries(): Promise<Array<DietEntry>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getDietEntries();
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getDietEntries();
+            return result;
+        }
+    }
+    async getDietEntriesByCategory(arg0: string): Promise<Array<DietEntry>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getDietEntriesByCategory(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getDietEntriesByCategory(arg0);
             return result;
         }
     }

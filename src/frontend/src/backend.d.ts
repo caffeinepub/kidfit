@@ -51,6 +51,15 @@ export interface TransformationInput {
     context: Uint8Array;
     response: http_request_result;
 }
+export interface DietEntry {
+    id: bigint;
+    fat: bigint;
+    carbs: bigint;
+    calories: bigint;
+    name: string;
+    category: string;
+    protein: bigint;
+}
 export type StripeSessionStatus = {
     __kind__: "completed";
     completed: {
@@ -92,6 +101,7 @@ export enum UserRole {
     guest = "guest"
 }
 export interface backendInterface {
+    addDietEntry(entry: DietEntry): Promise<void>;
     addExercise(exercise: Exercise): Promise<void>;
     addExerciseCategory(category: ExerciseCategory): Promise<void>;
     addXp(user: Principal, xp: bigint): Promise<void>;
@@ -104,6 +114,8 @@ export interface backendInterface {
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
     getCategories(): Promise<Array<ExerciseCategory>>;
+    getDietEntries(): Promise<Array<DietEntry>>;
+    getDietEntriesByCategory(category: string): Promise<Array<DietEntry>>;
     getExercisesByCategory(category: string): Promise<Array<Exercise>>;
     getProfile(user: Principal): Promise<UserProfile>;
     getStripeSessionStatus(sessionId: string): Promise<StripeSessionStatus>;
