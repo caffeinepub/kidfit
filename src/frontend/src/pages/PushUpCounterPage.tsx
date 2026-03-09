@@ -29,88 +29,147 @@ interface PosePoint {
 }
 
 /**
- * Calculate the angle (in degrees) at the elbow joint.
- * Uses vectors from elbow → shoulder and elbow → wrist.
- */
-function calcElbowAngle(
-  shoulder: PosePoint,
-  elbow: PosePoint,
-  wrist: PosePoint,
-): number {
-  const v1 = { x: shoulder.x - elbow.x, y: shoulder.y - elbow.y };
-  const v2 = { x: wrist.x - elbow.x, y: wrist.y - elbow.y };
-  const dot = v1.x * v2.x + v1.y * v2.y;
-  const mag1 = Math.sqrt(v1.x * v1.x + v1.y * v1.y);
-  const mag2 = Math.sqrt(v2.x * v2.x + v2.y * v2.y);
-  if (mag1 < 1e-6 || mag2 < 1e-6) return 90; // fallback
-  const cosAngle = Math.max(-1, Math.min(1, dot / (mag1 * mag2)));
-  return (Math.acos(cosAngle) * 180) / Math.PI;
-}
-
-/**
- * Front-camera-optimised push-up phase detection.
+ * Front-camera nose-based push-up phase detection.
  *
  * MoveNet keypoint indices:
- *   5 = left shoulder,  6 = right shoulder
- *   7 = left elbow,     8 = right elbow
- *   9 = left wrist,    10 = right wrist
+ *   0  = nose
+ *   5  = left shoulder
+ *   6  = right shoulder
+ *   11 = left hip
+ *   12 = right hip
  *
- * UP   → elbow angle > 140° (arms extended) OR elbows spread wide
- * DOWN → elbow angle < 110° (arms bent)     OR elbows tucked in
+ * When facing the camera and doing a push-up:
+ *   UP position   → nose is HIGH (lower Y value)
+ *   DOWN position → nose drops toward shoulders/floor (higher Y value)
  *
- * Falls back to elbow-spread vs shoulder-width heuristic for front-facing camera.
+ * We normalise by (hipY - shoulderY) to be camera-distance agnostic.
  */
-function estimatePushupPhase(keypoints: PosePoint[]): PosePhase {
-  const minScore = 0.15;
+function estimatePushupPhase(
+  keypoints: PosePoint[],
+  prevShoulderY: number | null,
+): { phase: PosePhase; shoulderY: number | null; noseRelative: number | null } {
+  const MIN_SCORE = 0.1; // very low to work on phones
 
+  const nose = keypoints[0];
   const lShoulder = keypoints[5];
   const rShoulder = keypoints[6];
-  const lElbow = keypoints[7];
-  const rElbow = keypoints[8];
-  const lWrist = keypoints[9];
-  const rWrist = keypoints[10];
+  const lHip = keypoints[11];
+  const rHip = keypoints[12];
 
-  if (!lShoulder || !rShoulder || !lElbow || !rElbow) return "unknown";
+  const lShoulderOk = lShoulder?.score >= MIN_SCORE;
+  const rShoulderOk = rShoulder?.score >= MIN_SCORE;
+  const lHipOk = lHip?.score >= MIN_SCORE;
+  const rHipOk = rHip?.score >= MIN_SCORE;
+  const noseOk = nose?.score >= MIN_SCORE;
 
-  const lShoulderOk = lShoulder.score >= minScore;
-  const rShoulderOk = rShoulder.score >= minScore;
-  const lElbowOk = lElbow.score >= minScore;
-  const rElbowOk = rElbow.score >= minScore;
-  const lWristOk = lWrist && lWrist.score >= minScore;
-  const rWristOk = rWrist && rWrist.score >= minScore;
+  // ── Primary: nose relative to shoulders ─────────────────────────────────
+  if (noseOk && (lShoulderOk || rShoulderOk) && (lHipOk || rHipOk)) {
+    const shoulderY =
+      lShoulderOk && rShoulderOk
+        ? (lShoulder.y + rShoulder.y) / 2
+        : lShoulderOk
+          ? lShoulder.y
+          : rShoulder.y;
 
-  // ── Primary: elbow angle method (needs wrist) ────────────────────────────
-  const lHighConf = lShoulderOk && lElbowOk && lWristOk;
-  const rHighConf = rShoulderOk && rElbowOk && rWristOk;
+    const hipY =
+      lHipOk && rHipOk ? (lHip.y + rHip.y) / 2 : lHipOk ? lHip.y : rHip.y;
 
-  if (lHighConf || rHighConf) {
-    const angles: number[] = [];
-    if (lHighConf) angles.push(calcElbowAngle(lShoulder, lElbow, lWrist!));
-    if (rHighConf) angles.push(calcElbowAngle(rShoulder, rElbow, rWrist!));
-    const avgAngle = angles.reduce((s, a) => s + a, 0) / angles.length;
-    if (avgAngle > 140) return "up";
-    if (avgAngle < 110) return "down";
-    return "unknown";
+    const range = hipY - shoulderY;
+
+    if (range < 20) {
+      // body too flat / not enough range to detect, fall through
+    } else {
+      const noseRelative = (nose.y - shoulderY) / range;
+      // noseRelative < 0.15  → nose well above/at shoulders = UP
+      // noseRelative > 0.35  → nose has dropped toward ground = DOWN
+      let phase: PosePhase = "unknown";
+      if (noseRelative < 0.15) phase = "up";
+      else if (noseRelative > 0.35) phase = "down";
+      return { phase, shoulderY, noseRelative };
+    }
   }
 
-  // ── Fallback: elbow spread vs shoulder width (front-facing camera) ────────
-  // When pushing up, elbows splay OUT wider than shoulders.
-  // When going down, elbows tuck IN closer to the torso.
-  const shoulderOk = lShoulderOk && rShoulderOk;
-  const elbowOk = lElbowOk && rElbowOk;
-  if (shoulderOk && elbowOk) {
-    const shoulderDist = Math.sqrt(
-      (rShoulder.x - lShoulder.x) ** 2 + (rShoulder.y - lShoulder.y) ** 2,
-    );
-    const elbowDist = Math.sqrt(
-      (rElbow.x - lElbow.x) ** 2 + (rElbow.y - lElbow.y) ** 2,
-    );
-    const ratio = shoulderDist > 1e-6 ? elbowDist / shoulderDist : 1;
-    if (ratio < 0.85) return "down"; // elbows tucked = down position
-    if (ratio > 1.05) return "up"; // elbows spread = up position
+  // ── Fallback: shoulder Y movement across frames ───────────────────────────
+  if (lShoulderOk || rShoulderOk) {
+    const curShoulderY =
+      lShoulderOk && rShoulderOk
+        ? (lShoulder.y + rShoulder.y) / 2
+        : lShoulderOk
+          ? lShoulder.y
+          : rShoulder.y;
+
+    if (prevShoulderY !== null) {
+      const delta = curShoulderY - prevShoulderY; // positive = moving down in image
+      if (delta > 8)
+        return { phase: "down", shoulderY: curShoulderY, noseRelative: null };
+      if (delta < -8)
+        return { phase: "up", shoulderY: curShoulderY, noseRelative: null };
+    }
+    return { phase: "unknown", shoulderY: curShoulderY, noseRelative: null };
   }
 
-  return "unknown";
+  return { phase: "unknown", shoulderY: null, noseRelative: null };
+}
+
+/** Draw skeleton overlay on canvas */
+function drawSkeleton(
+  ctx: CanvasRenderingContext2D,
+  keypoints: PosePoint[],
+  canvasWidth: number,
+  canvasHeight: number,
+) {
+  // Map normalised [0,1] coords to canvas pixels
+  const px = (kp: PosePoint) => kp.x * canvasWidth;
+  const py = (kp: PosePoint) => kp.y * canvasHeight;
+
+  const dotColor = (score: number) => {
+    if (score >= 0.5) return "#00ff88"; // bright green = high confidence
+    if (score >= 0.2) return "#ffdd00"; // yellow = medium
+    return "#ff4444"; // red = low
+  };
+
+  // Bones to draw: [from_idx, to_idx]
+  const bones: [number, number][] = [
+    [5, 6], // shoulders
+    [5, 11], // left shoulder → left hip
+    [6, 12], // right shoulder → right hip
+    [11, 12], // hips
+    [5, 7], // left shoulder → left elbow
+    [6, 8], // right shoulder → right elbow
+    [7, 9], // left elbow → left wrist
+    [8, 10], // right elbow → right wrist
+    [0, 5], // nose → left shoulder
+    [0, 6], // nose → right shoulder
+  ];
+
+  ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+
+  // Draw bones
+  for (const [a, b] of bones) {
+    const kpA = keypoints[a];
+    const kpB = keypoints[b];
+    if (!kpA || !kpB) continue;
+    if (kpA.score < 0.1 || kpB.score < 0.1) continue;
+    ctx.beginPath();
+    ctx.moveTo(px(kpA), py(kpA));
+    ctx.lineTo(px(kpB), py(kpB));
+    ctx.strokeStyle = "rgba(0,255,136,0.45)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  // Draw keypoint dots
+  for (let i = 0; i < Math.min(keypoints.length, 17); i++) {
+    const kp = keypoints[i];
+    if (!kp || kp.score < 0.1) continue;
+    ctx.beginPath();
+    ctx.arc(px(kp), py(kp), 5, 0, Math.PI * 2);
+    ctx.fillStyle = dotColor(kp.score);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,0.5)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
 }
 
 export default function PushUpCounterPage() {
@@ -136,8 +195,12 @@ export default function PushUpCounterPage() {
   const [sessionStarted, setSessionStarted] = useState(false);
   const [detectorError, setDetectorError] = useState<string | null>(null);
   const [countKey, setCountKey] = useState(0);
+  const [repPulse, setRepPulse] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [lastSessionCount, setLastSessionCount] = useState(0);
+  const [noseRelativeDebug, setNoseRelativeDebug] = useState<number | null>(
+    null,
+  );
 
   const detectorRef = useRef<any>(null);
   const rafRef = useRef<number | null>(null);
@@ -145,6 +208,9 @@ export default function PushUpCounterPage() {
   const lastTransitionRef = useRef<number>(0);
   const seenDownRef = useRef<boolean>(false);
   const lastRepTimeRef = useRef<number>(0);
+  const prevShoulderYRef = useRef<number | null>(null);
+  // overlay canvas (separate from the camera canvas)
+  const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
 
   const { mutateAsync: logPushups, isPending: isLogging } = useLogPushups();
   const { data: profile } = useUserProfile();
@@ -162,18 +228,17 @@ export default function PushUpCounterPage() {
           resolve();
           return;
         }
-        const script = document.createElement("script");
-        script.src = src;
-        script.async = true;
-        script.onload = () => resolve();
-        script.onerror = () => reject(new Error(`Failed to load ${src}`));
-        document.head.appendChild(script);
+        const s = document.createElement("script");
+        s.src = src;
+        s.async = true;
+        s.onload = () => resolve();
+        s.onerror = () => reject(new Error(`Failed to load ${src}`));
+        document.head.appendChild(s);
       });
     }
 
     async function loadDetector() {
       try {
-        // Load TF.js + MoveNet from CDN
         await loadScript(
           "https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js",
         );
@@ -181,11 +246,8 @@ export default function PushUpCounterPage() {
           "https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection@2.1.3/dist/pose-detection.min.js",
         );
 
-        const tf = (window as unknown as Record<string, unknown>).tf as {
-          ready: () => Promise<void>;
-        };
-        const poseDetection = (window as unknown as Record<string, unknown>)
-          .poseDetection as {
+        const tf = (window as any).tf as { ready: () => Promise<void> };
+        const poseDetection = (window as any).poseDetection as {
           createDetector: (
             model: string,
             config: Record<string, unknown>,
@@ -194,9 +256,7 @@ export default function PushUpCounterPage() {
           movenet: { modelType: { SINGLEPOSE_LIGHTNING: string } };
         };
 
-        if (!tf || !poseDetection) {
-          throw new Error("TF not loaded");
-        }
+        if (!tf || !poseDetection) throw new Error("TF not loaded");
 
         await tf.ready();
         const detector = await poseDetection.createDetector(
@@ -240,33 +300,52 @@ export default function PushUpCounterPage() {
 
       if (poses.length > 0) {
         const kps = poses[0].keypoints as PosePoint[];
-        const newPhase = estimatePushupPhase(kps);
+
+        // Draw skeleton overlay
+        const overlay = overlayCanvasRef.current;
+        if (overlay) {
+          const ctx = overlay.getContext("2d");
+          if (ctx) {
+            drawSkeleton(ctx, kps, overlay.width, overlay.height);
+          }
+        }
+
+        const {
+          phase: newPhase,
+          shoulderY,
+          noseRelative,
+        } = estimatePushupPhase(kps, prevShoulderYRef.current);
+
+        if (shoulderY !== null) prevShoulderYRef.current = shoulderY;
+        if (noseRelative !== null) setNoseRelativeDebug(noseRelative);
+
         const now = Date.now();
 
-        // Debounce transitions (min 300ms between transitions)
+        // Debounce transitions — 200ms
         if (
           newPhase !== "unknown" &&
           newPhase !== phaseRef.current &&
-          now - lastTransitionRef.current > 300
+          now - lastTransitionRef.current > 200
         ) {
           phaseRef.current = newPhase;
           setPhase(newPhase);
           lastTransitionRef.current = now;
 
-          // Track when we've seen the "down" phase
           if (newPhase === "down") {
             seenDownRef.current = true;
           }
 
           // Count a rep when we come back "up" after having been "down"
-          // Also enforce a minimum rep duration (800ms) to avoid double-counts
+          // Minimum rep duration: 600ms
           if (
             newPhase === "up" &&
             seenDownRef.current &&
-            now - lastRepTimeRef.current > 800
+            now - lastRepTimeRef.current > 600
           ) {
             setCount((c) => c + 1);
             setCountKey((k) => k + 1);
+            setRepPulse(true);
+            setTimeout(() => setRepPulse(false), 400);
             seenDownRef.current = false;
             lastRepTimeRef.current = now;
           }
@@ -288,6 +367,17 @@ export default function PushUpCounterPage() {
     };
   }, [isDetecting, isActive, detectorReady, detectLoop]);
 
+  // Clear overlay when camera stops
+  useEffect(() => {
+    if (!isActive) {
+      const overlay = overlayCanvasRef.current;
+      if (overlay) {
+        const ctx = overlay.getContext("2d");
+        if (ctx) ctx.clearRect(0, 0, overlay.width, overlay.height);
+      }
+    }
+  }, [isActive]);
+
   const handleStart = async () => {
     setCount(0);
     setPhase("unknown");
@@ -295,6 +385,8 @@ export default function PushUpCounterPage() {
     lastTransitionRef.current = 0;
     seenDownRef.current = false;
     lastRepTimeRef.current = 0;
+    prevShoulderYRef.current = null;
+    setNoseRelativeDebug(null);
     setSessionStarted(true);
     const ok = await startCamera();
     if (ok) {
@@ -331,18 +423,20 @@ export default function PushUpCounterPage() {
     lastTransitionRef.current = 0;
     seenDownRef.current = false;
     lastRepTimeRef.current = 0;
+    prevShoulderYRef.current = null;
+    setNoseRelativeDebug(null);
   };
 
   const phaseIndicator = {
     up: {
-      label: "UP",
-      color: "text-neon-green",
-      bg: "bg-primary/20 border-primary/30",
+      label: "UP ↑",
+      color: "text-emerald-400",
+      bg: "bg-emerald-500/20 border-emerald-500/40",
     },
     down: {
-      label: "DOWN",
-      color: "text-neon-cyan",
-      bg: "bg-accent/20 border-accent/30",
+      label: "DOWN ↓",
+      color: "text-sky-400",
+      bg: "bg-sky-500/20 border-sky-500/40",
     },
     unknown: {
       label: "READY",
@@ -371,17 +465,31 @@ export default function PushUpCounterPage() {
           <video
             ref={videoRef}
             className={cn(
-              "w-full h-full object-cover",
+              "absolute inset-0 w-full h-full object-cover",
               isActive ? "opacity-100" : "opacity-0",
               "scale-x-[-1]", // mirror for front camera
             )}
             playsInline
             muted
           />
+
+          {/* Hidden camera canvas (used by useCamera hook internally) */}
           <canvas ref={canvasRef} className="hidden" />
 
+          {/* Skeleton overlay canvas — visible over the video */}
+          <canvas
+            ref={overlayCanvasRef}
+            width={640}
+            height={480}
+            className={cn(
+              "absolute inset-0 w-full h-full pointer-events-none scale-x-[-1]",
+              isActive && detectorReady ? "opacity-100" : "opacity-0",
+            )}
+            style={{ transition: "opacity 0.3s" }}
+          />
+
           {!isActive && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-muted/80">
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-muted/80 z-10">
               {error ? (
                 <>
                   <CameraOff className="w-12 h-12 text-muted-foreground" />
@@ -415,7 +523,7 @@ export default function PushUpCounterPage() {
           {isActive && (
             <div
               className={cn(
-                "absolute top-3 left-3 px-3 py-1 rounded-full border font-display font-bold text-xs",
+                "absolute top-3 left-3 z-20 px-3 py-1 rounded-full border font-display font-bold text-xs",
                 pi.bg,
                 pi.color,
               )}
@@ -424,9 +532,16 @@ export default function PushUpCounterPage() {
             </div>
           )}
 
+          {/* Nose-relative debug value (small, top-right) */}
+          {isActive && noseRelativeDebug !== null && (
+            <div className="absolute top-3 right-3 z-20 px-2 py-0.5 rounded bg-black/60 text-white text-[10px] font-mono">
+              nr: {noseRelativeDebug.toFixed(2)}
+            </div>
+          )}
+
           {/* Detector loading overlay */}
           {isActive && !detectorReady && !detectorError && (
-            <div className="absolute bottom-3 left-3 right-3 bg-card/80 rounded-xl px-3 py-2 text-xs text-muted-foreground font-body text-center">
+            <div className="absolute bottom-3 left-3 right-3 z-20 bg-card/80 rounded-xl px-3 py-2 text-xs text-muted-foreground font-body text-center">
               Loading pose detector...
             </div>
           )}
@@ -434,7 +549,7 @@ export default function PushUpCounterPage() {
 
         {/* Rep Counter */}
         <motion.div className="card-sporty p-6 text-center relative overflow-hidden">
-          <div className="absolute inset-0 opacity-5">
+          <div className="absolute inset-0 opacity-5 pointer-events-none">
             <div
               className="absolute inset-0"
               style={{
@@ -450,18 +565,30 @@ export default function PushUpCounterPage() {
             <AnimatePresence mode="wait">
               <motion.div
                 key={countKey}
-                initial={{ scale: 1.3, opacity: 0.7 }}
+                initial={{ scale: 1.5, opacity: 0.6 }}
                 animate={{ scale: 1, opacity: 1 }}
-                transition={{ duration: 0.25, type: "spring" }}
-                className="font-display font-black text-8xl text-neon-green leading-none mb-2"
-                style={{ textShadow: "0 0 30px oklch(0.85 0.22 130 / 0.4)" }}
+                transition={{
+                  duration: 0.2,
+                  type: "spring",
+                  stiffness: 300,
+                  damping: 15,
+                }}
+                className={cn(
+                  "font-display font-black text-8xl leading-none mb-2 transition-colors duration-150",
+                  repPulse ? "text-yellow-300" : "text-neon-green",
+                )}
+                style={{
+                  textShadow: repPulse
+                    ? "0 0 40px oklch(0.9 0.28 90 / 0.8)"
+                    : "0 0 30px oklch(0.85 0.22 130 / 0.4)",
+                }}
               >
                 {count}
               </motion.div>
             </AnimatePresence>
             <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground font-body">
               <span>
-                Arms wide = UP · Arms tucked = DOWN · rep counts on return UP
+                Face the camera · Full upper body visible · Go DOWN and push UP
               </span>
             </div>
           </div>
@@ -475,18 +602,15 @@ export default function PushUpCounterPage() {
               How it works
             </h3>
             <ul className="space-y-1 text-xs text-muted-foreground font-body">
+              <li>• Prop your phone in front of you so it faces you</li>
               <li>
-                • Position your full upper body and both arms in frame — camera
-                in front of you
+                • Make sure your head, shoulders, and hips are all visible
               </li>
+              <li>• Do push-ups — go DOWN close to the floor, then push UP</li>
               <li>
-                • Arms spread wide = UP position, arms bent/tucked = DOWN
-                position
+                • The AI tracks your nose dropping and rising to count reps
               </li>
-              <li>• The AI counts a rep when you go down and push back up</li>
-              <li>
-                • Good lighting helps — make sure arms are clearly visible
-              </li>
+              <li>• Good lighting helps — avoid strong backlight behind you</li>
             </ul>
             {detectorError && (
               <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3 text-xs text-destructive font-body">
@@ -516,6 +640,7 @@ export default function PushUpCounterPage() {
                 onClick={handleReset}
                 className="h-14 w-14 border-border"
                 title="Reset counter"
+                data-ocid="pushups.reset.button"
               >
                 <RotateCcw className="w-5 h-5" />
               </Button>
@@ -576,6 +701,7 @@ export default function PushUpCounterPage() {
             variant="outline"
             onClick={() => setShowShareModal(true)}
             className="w-full h-12 border-border font-display font-bold gap-2"
+            data-ocid="pushups.share.button"
           >
             <Share2 className="w-4 h-4" />
             Share My Result
