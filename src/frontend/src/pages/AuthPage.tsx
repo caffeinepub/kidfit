@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useQueryClient } from "@tanstack/react-query";
 import { Loader2, ShieldCheck, Zap } from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
@@ -11,6 +12,7 @@ export default function AuthPage() {
   const { data: profile, isLoading: profileLoading } = useUserProfile();
   const { mutateAsync: registerUser, isPending: isRegistering } =
     useRegisterUser();
+  const queryClient = useQueryClient();
   const [username, setUsername] = useState("");
   const [error, setError] = useState("");
 
@@ -30,8 +32,24 @@ export default function AuthPage() {
     setError("");
     try {
       await registerUser(trimmed);
-    } catch {
-      setError("Could not register. Please try again.");
+      // Force a profile refetch after a short delay as a safety net
+      setTimeout(() => {
+        queryClient.refetchQueries({ queryKey: ["userProfile"] });
+      }, 1500);
+    } catch (err: unknown) {
+      const msg = (() => {
+        try {
+          return JSON.stringify(err);
+        } catch {
+          return String(err);
+        }
+      })();
+      if (msg.toLowerCase().includes("already registered")) {
+        // User already exists — force a profile reload
+        queryClient.refetchQueries({ queryKey: ["userProfile"] });
+        return;
+      }
+      setError("Could not register. Please refresh and try again.");
     }
   };
 

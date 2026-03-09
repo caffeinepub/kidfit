@@ -112,6 +112,7 @@ export interface backendInterface {
     enterTournament(tournamentId: bigint): Promise<void>;
     finalizeTournament(tournamentId: bigint): Promise<void>;
     getCallerUserProfile(): Promise<UserProfile | null>;
+    getLeaderboard(): Promise<LeaderboardEntry[]>;
     getCallerUserRole(): Promise<UserRole>;
     getCategories(): Promise<Array<ExerciseCategory>>;
     getDietEntries(): Promise<Array<DietEntry>>;
@@ -131,4 +132,11 @@ export interface backendInterface {
     setStripeConfiguration(config: StripeConfiguration): Promise<void>;
     submitTournamentScore(tournamentId: bigint, pushupCount: bigint): Promise<void>;
     transform(input: TransformationInput): Promise<TransformationOutput>;
+}
+export interface LeaderboardEntry {
+  user: Principal;
+  username: string;
+  xp: bigint;
+  level: bigint;
+  tier: Tier;
 }

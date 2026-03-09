@@ -10,6 +10,7 @@ import BattlePage from "./pages/BattlePage";
 import DietPage from "./pages/DietPage";
 import ExercisesPage from "./pages/ExercisesPage";
 import HomePage from "./pages/HomePage";
+import LeaderboardPage from "./pages/LeaderboardPage";
 import ProfilePage from "./pages/ProfilePage";
 import PushUpCounterPage from "./pages/PushUpCounterPage";
 import TournamentsPage from "./pages/TournamentsPage";
@@ -22,7 +23,8 @@ type Page =
   | "profile"
   | "battle"
   | "diet"
-  | "admin";
+  | "admin"
+  | "leaderboard";
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState<Page>("home");
@@ -89,6 +91,8 @@ export default function App() {
         return <DietPage />;
       case "admin":
         return <AdminPage />;
+      case "leaderboard":
+        return <LeaderboardPage />;
       default:
         return <HomePage onNavigate={setCurrentPage} />;
     }

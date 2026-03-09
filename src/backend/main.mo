@@ -12,7 +12,10 @@ import Authorization "authorization/access-control";
 import MixinAuthorization "authorization/MixinAuthorization";
 import Stripe "stripe/stripe";
 import OutCall "http-outcalls/outcall";
+
 import Runtime "mo:core/Runtime";
+
+// Apply migration on upgrades to new version [runs with every new deployment]
 
 actor {
   // Enums
@@ -112,7 +115,8 @@ actor {
       adFreeUntil = 0;
     };
     profiles.add(caller, profile);
-    Authorization.assignRole(accessControlState, caller, caller, #user);
+    // DIRECTLY ADD ROLE FOR INITIAL REGISTRATION!
+    accessControlState.userRoles.add(caller, #user);
   };
 
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
@@ -414,7 +418,31 @@ actor {
     allEntries.filter(func(entry) { entry.category == category });
   };
 
-  // *** Stripe Integration ***
+  // *** Leaderboard ***
+  public type LeaderboardEntry = {
+    user : Principal;
+    username : Text;
+    xp : Nat;
+    level : Nat;
+    tier : Tier;
+  };
+
+  public query func getLeaderboard() : async [LeaderboardEntry] {
+    let entries = profiles.entries().map(
+      func((principal, profile)) : LeaderboardEntry {
+        {
+          user = principal;
+          username = profile.username;
+          xp = profile.xp;
+          level = profile.level;
+          tier = profile.tier;
+        };
+      }
+    ).toArray();
+    entries.sort(func(a, b) { Nat.compare(b.xp, a.xp) });
+  };
+
+    // *** Stripe Integration ***
   public query ({ caller }) func isStripeConfigured() : async Bool {
     stripeConfig != null;
   };

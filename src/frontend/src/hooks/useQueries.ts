@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   Exercise,
   ExerciseCategory,
+  LeaderboardEntry,
   TournamentEntry,
   UserProfile,
 } from "../backend.d";
@@ -14,7 +15,12 @@ export function useUserProfile() {
     queryKey: ["userProfile"],
     queryFn: async () => {
       if (!actor) return null;
-      return actor.getCallerUserProfile();
+      // Motoko optionals return as [] or [value] in JS — unwrap correctly
+      const result = await actor.getCallerUserProfile();
+      if (Array.isArray(result)) {
+        return result.length > 0 ? (result[0] as UserProfile) : null;
+      }
+      return (result as UserProfile) ?? null;
     },
     enabled: !!actor && !isFetching,
   });
@@ -29,15 +35,35 @@ export function useRegisterUser() {
       try {
         await actor.registerUser(username);
       } catch (err: unknown) {
-        // If the user is already registered (e.g. role was lost or page reloaded
-        // mid-flow), just continue — the profile query will pick up the existing profile.
-        const msg = err instanceof Error ? err.message : String(err);
-        if (!msg.toLowerCase().includes("already registered")) {
-          throw err;
+        // ICP traps wrap messages as:
+        //   "Canister ... trapped with message: ..."
+        // so the "already registered" text may be buried deep in a
+        // nested object or stringified blob. Recursively stringify the
+        // entire error so we catch every possible variation.
+        const fullText = (() => {
+          try {
+            return JSON.stringify(err);
+          } catch {
+            return String(err);
+          }
+        })();
+        if (fullText.toLowerCase().includes("already registered")) {
+          // not an error — user exists, just continue
+          return;
         }
+        throw err;
       }
     },
-    onSuccess: () => {
+    onSuccess: (_data, username) => {
+      // Optimistically set profile so App.tsx redirects immediately
+      queryClient.setQueryData(["userProfile"], {
+        username,
+        xp: BigInt(0),
+        level: BigInt(1),
+        tier: { bronze: null },
+        adFreeUntil: BigInt(0),
+      });
+      // Also trigger a background refetch to get authoritative data
       queryClient.invalidateQueries({ queryKey: ["userProfile"] });
     },
   });
@@ -323,5 +349,28 @@ export function useFinalizeTournament() {
       if (!actor) throw new Error("No actor");
       await actor.finalizeTournament(tournamentId);
     },
+  });
+}
+
+// ===== GLOBAL LEADERBOARD =====
+export function useLeaderboard() {
+  const { actor, isFetching } = useActor();
+  return useQuery<LeaderboardEntry[]>({
+    queryKey: ["globalLeaderboard"],
+    queryFn: async () => {
+      if (!actor) return [];
+      try {
+        const result = await (
+          actor as unknown as {
+            getLeaderboard: () => Promise<LeaderboardEntry[]>;
+          }
+        ).getLeaderboard();
+        return result as LeaderboardEntry[];
+      } catch {
+        // Backend may not have getLeaderboard yet — return empty
+        return [];
+      }
+    },
+    enabled: !!actor && !isFetching,
   });
 }

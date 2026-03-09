@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
 import {
   Apple,
+  BarChart3,
   Dumbbell,
   Home,
   Swords,
@@ -17,7 +18,8 @@ type Page =
   | "profile"
   | "battle"
   | "diet"
-  | "admin";
+  | "admin"
+  | "leaderboard";
 
 interface BottomNavProps {
   current: Page;
@@ -43,6 +45,12 @@ const navItems = [
     label: "Battle",
     icon: Swords,
     ocid: "nav.battle.link",
+  },
+  {
+    id: "leaderboard" as Page,
+    label: "Rank",
+    icon: BarChart3,
+    ocid: "nav.leaderboard.link",
   },
   {
     id: "tournaments" as Page,
