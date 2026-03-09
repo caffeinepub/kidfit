@@ -26,7 +26,16 @@ export function useRegisterUser() {
   return useMutation({
     mutationFn: async (username: string) => {
       if (!actor) throw new Error("No actor");
-      await actor.registerUser(username);
+      try {
+        await actor.registerUser(username);
+      } catch (err: unknown) {
+        // If the user is already registered (e.g. role was lost or page reloaded
+        // mid-flow), just continue — the profile query will pick up the existing profile.
+        const msg = err instanceof Error ? err.message : String(err);
+        if (!msg.toLowerCase().includes("already registered")) {
+          throw err;
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["userProfile"] });

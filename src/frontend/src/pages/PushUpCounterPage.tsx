@@ -55,13 +55,13 @@ function calcElbowAngle(
  *   7 = left elbow,     8 = right elbow
  *   9 = left wrist,    10 = right wrist
  *
- * UP   → elbow angle > 150° (arms extended)
- * DOWN → elbow angle < 100° (arms bent)
+ * UP   → elbow angle > 140° (arms extended) OR elbows spread wide
+ * DOWN → elbow angle < 110° (arms bent)     OR elbows tucked in
  *
- * Falls back to elbow-Y-vs-shoulder-Y comparison when confidence is low.
+ * Falls back to elbow-spread vs shoulder-width heuristic for front-facing camera.
  */
 function estimatePushupPhase(keypoints: PosePoint[]): PosePhase {
-  const minScore = 0.25;
+  const minScore = 0.15;
 
   const lShoulder = keypoints[5];
   const rShoulder = keypoints[6];
@@ -70,45 +70,44 @@ function estimatePushupPhase(keypoints: PosePoint[]): PosePhase {
   const lWrist = keypoints[9];
   const rWrist = keypoints[10];
 
-  if (!lShoulder || !rShoulder || !lElbow || !rElbow || !lWrist || !rWrist) {
-    return "unknown";
-  }
+  if (!lShoulder || !rShoulder || !lElbow || !rElbow) return "unknown";
 
-  const lHighConf =
-    lShoulder.score >= minScore &&
-    lElbow.score >= minScore &&
-    lWrist.score >= minScore;
-  const rHighConf =
-    rShoulder.score >= minScore &&
-    rElbow.score >= minScore &&
-    rWrist.score >= minScore;
+  const lShoulderOk = lShoulder.score >= minScore;
+  const rShoulderOk = rShoulder.score >= minScore;
+  const lElbowOk = lElbow.score >= minScore;
+  const rElbowOk = rElbow.score >= minScore;
+  const lWristOk = lWrist && lWrist.score >= minScore;
+  const rWristOk = rWrist && rWrist.score >= minScore;
 
-  // ── Primary: elbow angle method ──────────────────────────────────────────
+  // ── Primary: elbow angle method (needs wrist) ────────────────────────────
+  const lHighConf = lShoulderOk && lElbowOk && lWristOk;
+  const rHighConf = rShoulderOk && rElbowOk && rWristOk;
+
   if (lHighConf || rHighConf) {
     const angles: number[] = [];
-    if (lHighConf) angles.push(calcElbowAngle(lShoulder, lElbow, lWrist));
-    if (rHighConf) angles.push(calcElbowAngle(rShoulder, rElbow, rWrist));
+    if (lHighConf) angles.push(calcElbowAngle(lShoulder, lElbow, lWrist!));
+    if (rHighConf) angles.push(calcElbowAngle(rShoulder, rElbow, rWrist!));
     const avgAngle = angles.reduce((s, a) => s + a, 0) / angles.length;
-
-    if (avgAngle > 150) return "up";
-    if (avgAngle < 100) return "down";
+    if (avgAngle > 140) return "up";
+    if (avgAngle < 110) return "down";
     return "unknown";
   }
 
-  // ── Fallback: elbow Y vs shoulder Y ──────────────────────────────────────
-  // In pixel coords, higher Y = lower on screen.
-  // When arms are bent (down), elbows drop well below shoulder level.
-  const elbowYConf =
-    lElbow.score >= minScore * 0.6 && rElbow.score >= minScore * 0.6;
-  const shoulderYConf =
-    lShoulder.score >= minScore * 0.6 && rShoulder.score >= minScore * 0.6;
-
-  if (elbowYConf && shoulderYConf) {
-    const avgElbowY = (lElbow.y + rElbow.y) / 2;
-    const avgShoulderY = (lShoulder.y + rShoulder.y) / 2;
-    const diff = avgElbowY - avgShoulderY; // positive → elbows below shoulders
-    if (diff > 40) return "down";
-    if (diff < -10) return "up";
+  // ── Fallback: elbow spread vs shoulder width (front-facing camera) ────────
+  // When pushing up, elbows splay OUT wider than shoulders.
+  // When going down, elbows tuck IN closer to the torso.
+  const shoulderOk = lShoulderOk && rShoulderOk;
+  const elbowOk = lElbowOk && rElbowOk;
+  if (shoulderOk && elbowOk) {
+    const shoulderDist = Math.sqrt(
+      (rShoulder.x - lShoulder.x) ** 2 + (rShoulder.y - lShoulder.y) ** 2,
+    );
+    const elbowDist = Math.sqrt(
+      (rElbow.x - lElbow.x) ** 2 + (rElbow.y - lElbow.y) ** 2,
+    );
+    const ratio = shoulderDist > 1e-6 ? elbowDist / shoulderDist : 1;
+    if (ratio < 0.85) return "down"; // elbows tucked = down position
+    if (ratio > 1.05) return "up"; // elbows spread = up position
   }
 
   return "unknown";
@@ -144,6 +143,8 @@ export default function PushUpCounterPage() {
   const rafRef = useRef<number | null>(null);
   const phaseRef = useRef<PosePhase>("unknown");
   const lastTransitionRef = useRef<number>(0);
+  const seenDownRef = useRef<boolean>(false);
+  const lastRepTimeRef = useRef<number>(0);
 
   const { mutateAsync: logPushups, isPending: isLogging } = useLogPushups();
   const { data: profile } = useUserProfile();
@@ -242,21 +243,32 @@ export default function PushUpCounterPage() {
         const newPhase = estimatePushupPhase(kps);
         const now = Date.now();
 
-        // Debounce transitions (min 400ms between transitions)
+        // Debounce transitions (min 300ms between transitions)
         if (
           newPhase !== "unknown" &&
           newPhase !== phaseRef.current &&
-          now - lastTransitionRef.current > 400
+          now - lastTransitionRef.current > 300
         ) {
-          const prevPhase = phaseRef.current;
           phaseRef.current = newPhase;
           setPhase(newPhase);
           lastTransitionRef.current = now;
 
-          // Count a rep when transitioning from down back to up
-          if (newPhase === "up" && prevPhase === "down") {
+          // Track when we've seen the "down" phase
+          if (newPhase === "down") {
+            seenDownRef.current = true;
+          }
+
+          // Count a rep when we come back "up" after having been "down"
+          // Also enforce a minimum rep duration (800ms) to avoid double-counts
+          if (
+            newPhase === "up" &&
+            seenDownRef.current &&
+            now - lastRepTimeRef.current > 800
+          ) {
             setCount((c) => c + 1);
             setCountKey((k) => k + 1);
+            seenDownRef.current = false;
+            lastRepTimeRef.current = now;
           }
         }
       }
@@ -281,6 +293,8 @@ export default function PushUpCounterPage() {
     setPhase("unknown");
     phaseRef.current = "unknown";
     lastTransitionRef.current = 0;
+    seenDownRef.current = false;
+    lastRepTimeRef.current = 0;
     setSessionStarted(true);
     const ok = await startCamera();
     if (ok) {
@@ -315,6 +329,8 @@ export default function PushUpCounterPage() {
     setPhase("unknown");
     phaseRef.current = "unknown";
     lastTransitionRef.current = 0;
+    seenDownRef.current = false;
+    lastRepTimeRef.current = 0;
   };
 
   const phaseIndicator = {
@@ -444,7 +460,9 @@ export default function PushUpCounterPage() {
               </motion.div>
             </AnimatePresence>
             <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground font-body">
-              <span>Rep detected on up → down → up cycle</span>
+              <span>
+                Arms wide = UP · Arms tucked = DOWN · rep counts on return UP
+              </span>
             </div>
           </div>
         </motion.div>
@@ -458,12 +476,17 @@ export default function PushUpCounterPage() {
             </h3>
             <ul className="space-y-1 text-xs text-muted-foreground font-body">
               <li>
-                • Position your phone/laptop in front of you so the camera can
-                see your upper body and arms
+                • Position your full upper body and both arms in frame — camera
+                in front of you
               </li>
-              <li>• Start in the "up" position (arms extended)</li>
-              <li>• The AI counts reps when you go down and come back up</li>
-              <li>• Good lighting helps improve detection accuracy</li>
+              <li>
+                • Arms spread wide = UP position, arms bent/tucked = DOWN
+                position
+              </li>
+              <li>• The AI counts a rep when you go down and push back up</li>
+              <li>
+                • Good lighting helps — make sure arms are clearly visible
+              </li>
             </ul>
             {detectorError && (
               <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3 text-xs text-destructive font-body">

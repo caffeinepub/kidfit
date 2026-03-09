@@ -86,7 +86,7 @@ export default function TournamentsPage() {
       const sessionUrl = await createCheckout({
         items: [
           {
-            productName: `KidFit Tournament: ${tournament.name}`,
+            productName: `TeenTuffLifts Tournament: ${tournament.name}`,
             currency: "inr",
             quantity: BigInt(1),
             priceInCents: BigInt(5000),

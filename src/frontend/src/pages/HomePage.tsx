@@ -291,15 +291,15 @@ export default function HomePage({ onNavigate }: HomePageProps) {
               "linear-gradient(135deg, oklch(0.18 0.04 265), oklch(0.2 0.06 150 / 0.5))",
           }}
         >
-          <div className="absolute top-0 right-0 text-8xl opacity-10 -translate-y-2 translate-x-2 select-none">
+          <div className="absolute top-0 right-0 w-28 h-28 overflow-hidden rounded-bl-2xl opacity-60 flex items-center justify-center text-5xl">
             💪
           </div>
           <h3 className="font-display font-black text-xl text-neon-green mb-1">
             Keep Grinding!
           </h3>
-          <p className="text-muted-foreground text-sm font-body">
-            Every rep counts. Every session gets you stronger. You don't need a
-            gym — you need grit.
+          <p className="text-muted-foreground text-sm font-body pr-20">
+            Every rep counts. Bags, bottles, backpacks — anything heavy makes
+            you stronger. You don't need a gym.
           </p>
           <div className="mt-3">
             <Button

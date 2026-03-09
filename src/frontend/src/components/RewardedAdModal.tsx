@@ -147,7 +147,7 @@ export default function RewardedAdModal({
             >
               <div className="absolute inset-0 flex flex-col items-center justify-center">
                 <div className="text-white font-display text-2xl font-bold mb-1">
-                  KIDFIT PRO
+                  TEENTUFF PRO
                 </div>
                 <div className="text-white/80 text-sm font-body">
                   Level up your workout!

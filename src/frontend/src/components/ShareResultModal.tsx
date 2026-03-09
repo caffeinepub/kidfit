@@ -28,7 +28,7 @@ export default function ShareResultModal({
 }: ShareResultModalProps) {
   const [copied, setCopied] = useState(false);
 
-  const shareText = `I just crushed ${repCount} push-ups on KidFit and earned ${xpEarned} XP! 💪 Tier: ${tier} - Can you beat me? #KidFit #FitnessKids`;
+  const shareText = `I just crushed ${repCount} push-ups on TeenTuffLifts and earned ${xpEarned} XP! 💪 Tier: ${tier} - Can you beat me? #TeenTuffLifts #NoGymNeeded`;
 
   const handleWhatsApp = () => {
     window.open(
@@ -40,7 +40,10 @@ export default function ShareResultModal({
   const handleInstagram = async () => {
     if (navigator.share) {
       try {
-        await navigator.share({ text: shareText, title: "KidFit Result" });
+        await navigator.share({
+          text: shareText,
+          title: "TeenTuffLifts Result",
+        });
       } catch {
         // User cancelled or not supported
         await copyToClipboard();
@@ -117,7 +120,7 @@ export default function ShareResultModal({
               💪
             </div>
             <div className="text-xs font-body text-muted-foreground uppercase tracking-wider mb-1">
-              KidFit Result
+              TeenTuffLifts Result
             </div>
             <div
               className="font-display font-black text-4xl text-neon-green leading-none mb-1"

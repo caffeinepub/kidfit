@@ -57,26 +57,12 @@ export default function AuthPage() {
             <div className="text-6xl mb-2">💪</div>
             <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-primary animate-pulse-glow" />
           </div>
-          <h1 className="font-display text-5xl font-black text-foreground tracking-tight mb-2">
-            KID<span className="text-neon-green">FIT</span>
+          <h1 className="font-display text-4xl font-black text-foreground tracking-tight mb-2">
+            TEEN<span className="text-neon-green">TUFF</span>LIFTS
           </h1>
           <p className="text-muted-foreground font-body text-lg max-w-xs">
-            Level up your strength. No gym required.
+            Get strong anywhere. No gym, no excuses.
           </p>
-        </motion.div>
-
-        {/* Hero image */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.2, duration: 0.5 }}
-          className="w-full max-w-sm rounded-2xl overflow-hidden mb-8 border border-border/50"
-        >
-          <img
-            src="/assets/generated/kidfit-hero.dim_800x400.jpg"
-            alt="Kids working out"
-            className="w-full h-40 object-cover"
-          />
         </motion.div>
 
         {/* Stats teaser */}

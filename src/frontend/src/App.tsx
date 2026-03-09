@@ -52,7 +52,7 @@ export default function App() {
       <div className="min-h-screen gradient-mesh flex items-center justify-center">
         <div className="text-center">
           <div className="font-display text-4xl font-black mb-2">
-            KID<span className="text-neon-green">FIT</span>
+            TEEN<span className="text-neon-green">TUFF</span>LIFTS
           </div>
           <div className="flex justify-center">
             <div className="w-6 h-6 border-2 border-neon-green border-t-transparent rounded-full animate-spin" />

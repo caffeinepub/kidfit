@@ -300,12 +300,12 @@ export default function BattlePage() {
 
   const handleShareCode = async () => {
     if (!currentBattle) return;
-    const shareText = `Join my 24-hour Push-Up Battle on KidFit! Use code: ${currentBattle.code} 💪 #KidFit`;
+    const shareText = `Join my 24-hour Push-Up Battle on TeenTuffLifts! Use code: ${currentBattle.code} 💪 #TeenTuffLifts`;
     if (navigator.share) {
       try {
         await navigator.share({
           text: shareText,
-          title: "KidFit Battle Challenge",
+          title: "TeenTuffLifts Battle Challenge",
         });
       } catch {
         handleCopyCode();
@@ -463,20 +463,28 @@ export default function BattlePage() {
               className="space-y-4"
             >
               <div
-                className="card-sporty p-6 text-center relative overflow-hidden"
+                className="card-sporty text-center relative overflow-hidden"
                 style={{
                   background:
                     "linear-gradient(135deg, oklch(0.14 0.04 265), oklch(0.18 0.06 42 / 0.4))",
                 }}
               >
-                <div className="text-6xl mb-3">⚔️</div>
-                <h2 className="font-display font-black text-2xl mb-2">
-                  Challenge a Friend!
-                </h2>
-                <p className="text-sm text-muted-foreground font-body">
-                  Create a battle, share your code, and see who can do more
-                  push-ups in 24 hours.
-                </p>
+                <div className="w-full h-36 overflow-hidden rounded-t-xl mb-0">
+                  <img
+                    src="/assets/generated/teens_pushup_battle.dim_800x500.jpg"
+                    alt="Teens doing push-up battle"
+                    className="w-full h-full object-cover object-center"
+                  />
+                </div>
+                <div className="p-6 pt-4">
+                  <h2 className="font-display font-black text-2xl mb-2">
+                    Challenge a Friend!
+                  </h2>
+                  <p className="text-sm text-muted-foreground font-body">
+                    Create a battle, share your code, and see who can do more
+                    push-ups in 24 hours.
+                  </p>
+                </div>
               </div>
 
               <Button
