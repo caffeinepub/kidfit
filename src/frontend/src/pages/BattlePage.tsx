@@ -6,6 +6,7 @@ import {
   Camera,
   CheckCircle,
   Copy,
+  Loader2,
   RefreshCw,
   RotateCcw,
   Share2,
@@ -15,85 +16,159 @@ import {
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { Variant_active_finished_waiting } from "../backend.d";
 import { useCamera } from "../camera/useCamera";
 import ShareResultModal from "../components/ShareResultModal";
-import { useUserProfile } from "../hooks/useQueries";
+import { useInternetIdentity } from "../hooks/useInternetIdentity";
+import {
+  useCreateBattle,
+  useGetBattle,
+  useJoinBattle,
+  useUpdateBattleScore,
+  useUserProfile,
+} from "../hooks/useQueries";
 import { getTierFromXp } from "../lib/xp";
 
 type BattleState = "menu" | "create" | "join" | "active" | "result";
 type PosePhase = "up" | "down" | "unknown";
 
-interface PosePoint {
-  x: number;
-  y: number;
-  score: number;
+// ─── Canvas-based motion detection (same as PushUpCounterPage) ───────────────
+const SAMPLE_ROWS = 40;
+const MOTION_THRESH = 6;
+const STABLE_FRAMES = 3;
+const MIN_REP_MS = 700;
+const PHASE_HYSTERESIS = 0.07;
+
+interface MotionState {
+  prevGray: Uint8Array | null;
+  phase: PosePhase;
+  stablePhase: PosePhase;
+  stableCount: number;
+  seenDown: boolean;
+  lastRepTime: number;
+  lastTransition: number;
+  centroidHistory: number[];
 }
 
-interface BattleData {
-  code: string;
-  creatorName: string;
-  creatorScore: number;
-  challengerName: string | null;
-  challengerScore: number | null;
-  createdAt: number;
-  expiresAt: number;
-  status: "waiting" | "active" | "finished";
+function makeMotionState(): MotionState {
+  return {
+    prevGray: null,
+    phase: "unknown",
+    stablePhase: "unknown",
+    stableCount: 0,
+    seenDown: false,
+    lastRepTime: 0,
+    lastTransition: 0,
+    centroidHistory: [],
+  };
 }
 
-function calcElbowAngle(
-  shoulder: PosePoint,
-  elbow: PosePoint,
-  wrist: PosePoint,
-): number {
-  const v1 = { x: shoulder.x - elbow.x, y: shoulder.y - elbow.y };
-  const v2 = { x: wrist.x - elbow.x, y: wrist.y - elbow.y };
-  const dot = v1.x * v2.x + v1.y * v2.y;
-  const mag1 = Math.sqrt(v1.x * v1.x + v1.y * v1.y);
-  const mag2 = Math.sqrt(v2.x * v2.x + v2.y * v2.y);
-  if (mag1 < 1e-6 || mag2 < 1e-6) return 90;
-  const cosAngle = Math.max(-1, Math.min(1, dot / (mag1 * mag2)));
-  return (Math.acos(cosAngle) * 180) / Math.PI;
-}
+function analyseFrame(
+  video: HTMLVideoElement,
+  offscreenCtx: CanvasRenderingContext2D,
+  state: MotionState,
+): { phase: PosePhase; repCounted: boolean } {
+  const W = offscreenCtx.canvas.width;
+  const H = offscreenCtx.canvas.height;
 
-function estimatePushupPhase(keypoints: PosePoint[]): PosePhase {
-  const minScore = 0.25;
-  const lShoulder = keypoints[5];
-  const rShoulder = keypoints[6];
-  const lElbow = keypoints[7];
-  const rElbow = keypoints[8];
-  const lWrist = keypoints[9];
-  const rWrist = keypoints[10];
-  if (!lShoulder || !rShoulder || !lElbow || !rElbow || !lWrist || !rWrist)
-    return "unknown";
-  const lHighConf =
-    lShoulder.score >= minScore &&
-    lElbow.score >= minScore &&
-    lWrist.score >= minScore;
-  const rHighConf =
-    rShoulder.score >= minScore &&
-    rElbow.score >= minScore &&
-    rWrist.score >= minScore;
-  if (lHighConf || rHighConf) {
-    const angles: number[] = [];
-    if (lHighConf) angles.push(calcElbowAngle(lShoulder, lElbow, lWrist));
-    if (rHighConf) angles.push(calcElbowAngle(rShoulder, rElbow, rWrist));
-    const avgAngle = angles.reduce((s, a) => s + a, 0) / angles.length;
-    if (avgAngle > 150) return "up";
-    if (avgAngle < 100) return "down";
-    return "unknown";
+  offscreenCtx.drawImage(video, 0, 0, W, H);
+  const imgData = offscreenCtx.getImageData(0, 0, W, H);
+  const data = imgData.data;
+
+  const gray = new Uint8Array(W * H);
+  for (let i = 0; i < W * H; i++) {
+    const r = data[i * 4];
+    const g = data[i * 4 + 1];
+    const b = data[i * 4 + 2];
+    gray[i] = (r * 77 + g * 150 + b * 29) >> 8;
   }
-  const elbowYConf =
-    lElbow.score >= minScore * 0.6 && rElbow.score >= minScore * 0.6;
-  const shoulderYConf =
-    lShoulder.score >= minScore * 0.6 && rShoulder.score >= minScore * 0.6;
-  if (elbowYConf && shoulderYConf) {
-    const avgElbowY = (lElbow.y + rElbow.y) / 2;
-    const avgShoulderY = (lShoulder.y + rShoulder.y) / 2;
-    const diff = avgElbowY - avgShoulderY;
-    if (diff > 40) return "down";
-    if (diff < -10) return "up";
+
+  let phase: PosePhase = state.phase;
+  let repCounted = false;
+
+  if (state.prevGray !== null) {
+    const rowH = Math.floor(H / SAMPLE_ROWS);
+    let motionSum = 0;
+    let centroidNumer = 0;
+
+    for (let row = 0; row < SAMPLE_ROWS; row++) {
+      let rowMotion = 0;
+      const y0 = row * rowH;
+      for (let y = y0; y < y0 + rowH; y++) {
+        for (let x = 0; x < W; x++) {
+          const idx = y * W + x;
+          rowMotion += Math.abs(gray[idx] - state.prevGray[idx]);
+        }
+      }
+      rowMotion /= rowH * W;
+      if (rowMotion > MOTION_THRESH / 10) {
+        motionSum += rowMotion;
+        centroidNumer += rowMotion * (row / SAMPLE_ROWS);
+      }
+    }
+
+    if (motionSum > 0) {
+      const centroid = centroidNumer / motionSum;
+      state.centroidHistory.push(centroid);
+      if (state.centroidHistory.length > 60) state.centroidHistory.shift();
+
+      if (state.centroidHistory.length >= 6) {
+        const sorted = [...state.centroidHistory].sort((a, b) => a - b);
+        const lo = sorted[Math.floor(sorted.length * 0.15)];
+        const hi = sorted[Math.floor(sorted.length * 0.85)];
+        const range = hi - lo;
+
+        let rawPhase: PosePhase = "unknown";
+        if (range > PHASE_HYSTERESIS) {
+          const upThreshold = lo + range * 0.35;
+          const downThreshold = lo + range * 0.65;
+          if (centroid <= upThreshold) rawPhase = "up";
+          else if (centroid >= downThreshold) rawPhase = "down";
+        }
+
+        if (rawPhase !== "unknown") {
+          if (rawPhase === state.stablePhase) {
+            state.stableCount += 1;
+          } else {
+            state.stablePhase = rawPhase;
+            state.stableCount = 1;
+          }
+
+          const now = Date.now();
+          if (
+            state.stableCount >= STABLE_FRAMES &&
+            rawPhase !== state.phase &&
+            now - state.lastTransition > 500
+          ) {
+            state.phase = rawPhase;
+            state.lastTransition = now;
+            phase = rawPhase;
+
+            if (rawPhase === "down") {
+              state.seenDown = true;
+            }
+
+            if (
+              rawPhase === "up" &&
+              state.seenDown &&
+              now - state.lastRepTime > MIN_REP_MS
+            ) {
+              repCounted = true;
+              state.seenDown = false;
+              state.lastRepTime = now;
+            }
+          } else {
+            phase = state.phase;
+          }
+        } else {
+          phase = state.phase;
+        }
+      }
+    }
   }
-  return "unknown";
+
+  state.prevGray = gray;
+  return { phase, repCounted };
 }
 
 function generateBattleCode(): string {
@@ -106,30 +181,51 @@ function generateBattleCode(): string {
 }
 
 function formatTimeRemaining(ms: number): string {
-  if (ms <= 0) return "Expired";
-  const hours = Math.floor(ms / (1000 * 60 * 60));
-  const mins = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
+  if (ms <= 0) return "Time's Up!";
+  const mins = Math.floor(ms / (1000 * 60));
   const secs = Math.floor((ms % (1000 * 60)) / 1000);
-  if (hours > 0) return `${hours}h ${mins}m remaining`;
-  if (mins > 0) return `${mins}m ${secs}s remaining`;
-  return `${secs}s remaining`;
+  if (mins > 0) return `${mins}m ${secs}s`;
+  return `${secs}s`;
 }
 
 export default function BattlePage() {
   const { data: profile } = useUserProfile();
+  const { identity } = useInternetIdentity();
   const username = profile?.username ?? "Athlete";
   const xp = profile ? Number(profile.xp) : 0;
   const tierInfo = getTierFromXp(xp);
 
   const [battleState, setBattleState] = useState<BattleState>("menu");
-  const [currentBattle, setCurrentBattle] = useState<BattleData | null>(null);
+  const [battleCode, setBattleCode] = useState<string | null>(null);
   const [isCreator, setIsCreator] = useState(true);
   const [joinCode, setJoinCode] = useState("");
   const [codeCopied, setCodeCopied] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState<number>(0);
   const [shareOpen, setShareOpen] = useState(false);
+  const [finalCreatorScore, setFinalCreatorScore] = useState(0);
+  const [finalChallengerScore, setFinalChallengerScore] = useState(0);
 
-  // Push-up counter state
+  // Backend mutations
+  const createBattle = useCreateBattle();
+  const joinBattle = useJoinBattle();
+  const updateScore = useUpdateBattleScore();
+
+  const updateScoreMutateRef = useRef(updateScore.mutate);
+  useEffect(() => {
+    updateScoreMutateRef.current = updateScore.mutate;
+  }, [updateScore.mutate]);
+
+  // Poll battle data every 3s
+  const { data: battleData } = useGetBattle(
+    battleState === "active" || battleState === "create" ? battleCode : null,
+  );
+
+  const battleDataRef = useRef(battleData);
+  useEffect(() => {
+    battleDataRef.current = battleData;
+  }, [battleData]);
+
+  // Camera + canvas motion detection
   const {
     videoRef,
     canvasRef,
@@ -141,155 +237,142 @@ export default function BattlePage() {
     stopCamera,
   } = useCamera({
     facingMode: "user",
-    width: 640,
-    height: 480,
+    width: 320,
+    height: 240,
   });
 
   const [count, setCount] = useState(0);
   const [phase, setPhase] = useState<PosePhase>("unknown");
   const [isDetecting, setIsDetecting] = useState(false);
-  const [detectorReady, setDetectorReady] = useState(false);
-  const [detectorError, setDetectorError] = useState<string | null>(null);
   const [countKey, setCountKey] = useState(0);
+  const [repPulse, setRepPulse] = useState(false);
+  const [calibrating, setCalibrating] = useState(false);
 
-  const detectorRef = useRef<any>(null);
   const rafRef = useRef<number | null>(null);
-  const phaseRef = useRef<PosePhase>("unknown");
-  const lastTransitionRef = useRef<number>(0);
+  const offscreenRef = useRef<HTMLCanvasElement | null>(null);
+  const offscreenCtxRef = useRef<CanvasRenderingContext2D | null>(null);
+  const motionStateRef = useRef<MotionState>(makeMotionState());
+  const countRef = useRef(0);
+  const scoreIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const battleCodeRef = useRef(battleCode);
+  const isCreatorRef = useRef(isCreator);
 
-  // Timer
   useEffect(() => {
-    if (battleState !== "active" || !currentBattle) return;
+    countRef.current = count;
+  }, [count]);
+  useEffect(() => {
+    battleCodeRef.current = battleCode;
+  }, [battleCode]);
+  useEffect(() => {
+    isCreatorRef.current = isCreator;
+  }, [isCreator]);
+
+  // Create offscreen canvas once
+  useEffect(() => {
+    const c = document.createElement("canvas");
+    c.width = 160;
+    c.height = 120;
+    offscreenRef.current = c;
+    offscreenCtxRef.current = c.getContext("2d", { willReadFrequently: true });
+  }, []);
+
+  // Timer from backend expiresAt
+  const expiresAt = battleData?.expiresAt;
+  useEffect(() => {
+    if (battleState !== "active" || !expiresAt) return;
+    const expiresAtMs = Number(expiresAt) / 1_000_000;
     const interval = setInterval(() => {
-      const remaining = currentBattle.expiresAt - Date.now();
-      setTimeRemaining(remaining);
+      const remaining = expiresAtMs - Date.now();
+      setTimeRemaining(Math.max(0, remaining));
       if (remaining <= 0) clearInterval(interval);
     }, 1000);
-    setTimeRemaining(currentBattle.expiresAt - Date.now());
+    setTimeRemaining(Math.max(0, expiresAtMs - Date.now()));
     return () => clearInterval(interval);
-  }, [battleState, currentBattle]);
+  }, [battleState, expiresAt]);
 
-  // Load TF detector
+  // Score sync every 3s
   useEffect(() => {
-    if (battleState !== "active") return;
-    let cancelled = false;
-
-    function loadScript(src: string): Promise<void> {
-      return new Promise((resolve, reject) => {
-        if (document.querySelector(`script[src="${src}"]`)) {
-          resolve();
-          return;
-        }
-        const script = document.createElement("script");
-        script.src = src;
-        script.async = true;
-        script.onload = () => resolve();
-        script.onerror = () => reject(new Error(`Failed to load ${src}`));
-        document.head.appendChild(script);
-      });
-    }
-
-    async function loadDetector() {
-      try {
-        await loadScript(
-          "https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js",
-        );
-        await loadScript(
-          "https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection@2.1.3/dist/pose-detection.min.js",
-        );
-        const tf = (window as any).tf;
-        const poseDetection = (window as any).poseDetection;
-        if (!tf || !poseDetection) throw new Error("TF not loaded");
-        await tf.ready();
-        const detector = await poseDetection.createDetector(
-          poseDetection.SupportedModels.MoveNet,
-          { modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING },
-        );
-        if (!cancelled) {
-          detectorRef.current = detector;
-          setDetectorReady(true);
-        }
-      } catch (err) {
-        console.warn("Pose detector:", err);
-        if (!cancelled)
-          setDetectorError("Pose detection unavailable. Use manual counting.");
+    if (battleState !== "active" || !battleCode) return;
+    scoreIntervalRef.current = setInterval(() => {
+      const code = battleCodeRef.current;
+      if (code) {
+        updateScoreMutateRef.current({ code, score: BigInt(countRef.current) });
       }
-    }
-
-    loadDetector();
+    }, 3000);
     return () => {
-      cancelled = true;
+      if (scoreIntervalRef.current) clearInterval(scoreIntervalRef.current);
     };
-  }, [battleState]);
+  }, [battleState, battleCode]);
 
-  const detectLoop = useCallback(async () => {
-    if (!detectorRef.current || !videoRef.current || !isActive) {
+  // Canvas detection loop
+  const detectLoop = useCallback(() => {
+    const video = videoRef.current;
+    const ctx = offscreenCtxRef.current;
+    if (!video || !ctx || !isActive) {
       setIsDetecting(false);
       return;
     }
-    const video = videoRef.current;
     if (video.readyState < 2) {
       rafRef.current = requestAnimationFrame(detectLoop);
       return;
     }
-    try {
-      const poses = await detectorRef.current.estimatePoses(video);
-      if (poses.length > 0) {
-        const kps = poses[0].keypoints as PosePoint[];
-        const newPhase = estimatePushupPhase(kps);
-        const now = Date.now();
-        if (
-          newPhase !== "unknown" &&
-          newPhase !== phaseRef.current &&
-          now - lastTransitionRef.current > 400
-        ) {
-          const prevPhase = phaseRef.current;
-          phaseRef.current = newPhase;
-          setPhase(newPhase);
-          lastTransitionRef.current = now;
-          if (newPhase === "up" && prevPhase === "down") {
-            setCount((c) => c + 1);
-            setCountKey((k) => k + 1);
-          }
-        }
-      }
-    } catch {
-      /* continue */
+
+    const { phase: newPhase, repCounted } = analyseFrame(
+      video,
+      ctx,
+      motionStateRef.current,
+    );
+
+    setPhase(newPhase);
+
+    if (repCounted) {
+      setCount((c) => c + 1);
+      setCountKey((k) => k + 1);
+      setRepPulse(true);
+      setTimeout(() => setRepPulse(false), 400);
     }
+
     rafRef.current = requestAnimationFrame(detectLoop);
   }, [isActive, videoRef]);
 
   useEffect(() => {
-    if (isDetecting && isActive && detectorReady) {
+    if (isDetecting && isActive) {
+      setCalibrating(true);
+      const t = setTimeout(() => setCalibrating(false), 3000);
       rafRef.current = requestAnimationFrame(detectLoop);
+      return () => {
+        clearTimeout(t);
+        if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      };
     }
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [isDetecting, isActive, detectorReady, detectLoop]);
+  }, [isDetecting, isActive, detectLoop]);
 
-  const handleCreateBattle = () => {
+  // ===== HANDLERS =====
+
+  const handleCreateBattle = async () => {
     const code = generateBattleCode();
-    const battle: BattleData = {
-      code,
-      creatorName: username,
-      creatorScore: 0,
-      challengerName: null,
-      challengerScore: null,
-      createdAt: Date.now(),
-      expiresAt: Date.now() + 86400000,
-      status: "waiting",
-    };
-    localStorage.setItem(`kidfit_battle_${code}`, JSON.stringify(battle));
-    setCurrentBattle(battle);
-    setIsCreator(true);
-    setBattleState("create");
+    try {
+      await createBattle.mutateAsync(code);
+      setBattleCode(code);
+      setIsCreator(true);
+      setBattleState("create");
+    } catch (err) {
+      const msg = String(err);
+      if (msg.includes("code already exists")) {
+        toast.error("Code conflict, try again.");
+      } else {
+        toast.error("Could not create battle. Try again.");
+      }
+    }
   };
 
   const handleCopyCode = async () => {
-    if (!currentBattle) return;
+    if (!battleCode) return;
     try {
-      await navigator.clipboard.writeText(currentBattle.code);
+      await navigator.clipboard.writeText(battleCode);
       setCodeCopied(true);
       setTimeout(() => setCodeCopied(false), 2000);
       toast.success("Battle code copied!");
@@ -299,145 +382,123 @@ export default function BattlePage() {
   };
 
   const handleShareCode = async () => {
-    if (!currentBattle) return;
-    const shareText = `Join my 24-hour Push-Up Battle on TeenTuffLifts! Use code: ${currentBattle.code} 💪 #TeenTuffLifts`;
+    if (!battleCode) return;
+    const shareText = `Join my Push-Up Battle on TeenTuffLifts! Use code: ${battleCode} 💪 #TeenTuffLifts`;
     if (navigator.share) {
       try {
         await navigator.share({
           text: shareText,
           title: "TeenTuffLifts Battle Challenge",
         });
+        return;
       } catch {
-        handleCopyCode();
+        /* fall through */
       }
-    } else {
-      await navigator.clipboard.writeText(shareText);
-      toast.success("Battle invite copied!");
     }
+    await navigator.clipboard.writeText(shareText);
+    toast.success("Battle invite copied!");
   };
 
   const handleStartSession = async () => {
     setCount(0);
-    phaseRef.current = "unknown";
-    lastTransitionRef.current = 0;
+    countRef.current = 0;
+    motionStateRef.current = makeMotionState();
     const ok = await startCamera();
     if (ok) setIsDetecting(true);
     setBattleState("active");
   };
 
-  const handleJoinBattle = () => {
+  const handleJoinBattle = async () => {
     const code = joinCode.trim().toUpperCase();
     if (code.length !== 6) {
       toast.error("Please enter a 6-character code");
       return;
     }
-    const stored = localStorage.getItem(`kidfit_battle_${code}`);
-    if (!stored) {
-      toast.error("Battle not found. Check the code and try again.");
-      return;
-    }
     try {
-      const battle = JSON.parse(stored) as BattleData;
-      if (battle.status !== "waiting") {
-        toast.error("This battle has already started.");
-        return;
-      }
-      if (Date.now() > battle.expiresAt) {
-        toast.error("This battle has expired.");
-        return;
-      }
-      const updated: BattleData = {
-        ...battle,
-        challengerName: username,
-        status: "active",
-      };
-      localStorage.setItem(`kidfit_battle_${code}`, JSON.stringify(updated));
-      setCurrentBattle(updated);
+      await joinBattle.mutateAsync(code);
+      setBattleCode(code);
       setIsCreator(false);
-      handleStartSessionJoin(updated);
-    } catch {
-      toast.error("Could not read battle data.");
-    }
-  };
-
-  const handleStartSessionJoin = async (battle: BattleData) => {
-    setCount(0);
-    phaseRef.current = "unknown";
-    lastTransitionRef.current = 0;
-    const ok = await startCamera();
-    if (ok) setIsDetecting(true);
-    setCurrentBattle(battle);
-    setBattleState("active");
-  };
-
-  const handleRefreshOpponent = () => {
-    if (!currentBattle) return;
-    const stored = localStorage.getItem(`kidfit_battle_${currentBattle.code}`);
-    if (!stored) return;
-    try {
-      const battle = JSON.parse(stored) as BattleData;
-      setCurrentBattle(battle);
-      toast.info("Opponent scores updated!");
-    } catch {
-      /* ignore */
+      setCount(0);
+      countRef.current = 0;
+      motionStateRef.current = makeMotionState();
+      const ok = await startCamera();
+      if (ok) setIsDetecting(true);
+      setBattleState("active");
+    } catch (err) {
+      const msg = String(err).toLowerCase();
+      if (msg.includes("not found") || msg.includes("does not exist")) {
+        toast.error("Battle not found. Check the code and try again.");
+      } else if (
+        msg.includes("already started") ||
+        msg.includes("not waiting")
+      ) {
+        toast.error("This battle has already started.");
+      } else if (msg.includes("expired")) {
+        toast.error("This battle has expired.");
+      } else {
+        toast.error("Could not join battle. Try again.");
+      }
     }
   };
 
   const handleSubmitScore = () => {
-    if (!currentBattle) return;
+    const code = battleCodeRef.current;
+    if (!code) return;
     setIsDetecting(false);
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    if (scoreIntervalRef.current) clearInterval(scoreIntervalRef.current);
     stopCamera();
 
-    const stored = localStorage.getItem(`kidfit_battle_${currentBattle.code}`);
-    let battle = currentBattle;
-    if (stored) {
-      try {
-        battle = JSON.parse(stored) as BattleData;
-      } catch {
-        /* use current */
-      }
+    updateScoreMutateRef.current({ code, score: BigInt(countRef.current) });
+
+    const latestBattle = battleDataRef.current;
+    const creatorScore = latestBattle ? Number(latestBattle.creatorScore) : 0;
+    const challengerScore = latestBattle
+      ? Number(latestBattle.challengerScore)
+      : 0;
+    if (isCreatorRef.current) {
+      setFinalCreatorScore(countRef.current);
+      setFinalChallengerScore(challengerScore);
+    } else {
+      setFinalChallengerScore(countRef.current);
+      setFinalCreatorScore(creatorScore);
     }
-
-    const updated: BattleData = isCreator
-      ? { ...battle, creatorScore: count, status: "finished" }
-      : { ...battle, challengerScore: count, status: "finished" };
-
-    localStorage.setItem(
-      `kidfit_battle_${currentBattle.code}`,
-      JSON.stringify(updated),
-    );
-    setCurrentBattle(updated);
     setBattleState("result");
   };
 
   const handlePlayAgain = () => {
-    setCurrentBattle(null);
+    setBattleCode(null);
     setCount(0);
     setPhase("unknown");
+    setJoinCode("");
     setBattleState("menu");
   };
 
-  // Phase indicator
-  const phaseColors = {
+  void identity;
+
+  const liveOpponentScore =
+    battleState === "active" && battleData
+      ? isCreator
+        ? Number(battleData.challengerScore)
+        : Number(battleData.creatorScore)
+      : null;
+
+  const myScore = isCreator ? finalCreatorScore : finalChallengerScore;
+  const opponentFinalScore = isCreator
+    ? finalChallengerScore
+    : finalCreatorScore;
+  const iWon = myScore > opponentFinalScore;
+
+  const phaseColors: Record<PosePhase, string> = {
     up: "text-neon-green",
     down: "text-neon-cyan",
     unknown: "text-muted-foreground",
   };
-  const phaseLabels = { up: "UP", down: "DOWN", unknown: "READY" };
-
-  // Result calculation
-  const myScore = isCreator
-    ? (currentBattle?.creatorScore ?? 0)
-    : (currentBattle?.challengerScore ?? 0);
-  const opponentScore = isCreator
-    ? (currentBattle?.challengerScore ?? null)
-    : (currentBattle?.creatorScore ?? null);
-  const myName = username;
-  const opponentName = isCreator
-    ? currentBattle?.challengerName
-    : currentBattle?.creatorName;
-  const iWon = opponentScore !== null ? myScore > opponentScore : true;
+  const phaseLabels: Record<PosePhase, string> = {
+    up: "UP ↑",
+    down: "DOWN ↓",
+    unknown: "READY",
+  };
 
   return (
     <div className="flex flex-col min-h-screen gradient-mesh pb-36">
@@ -447,7 +508,7 @@ export default function BattlePage() {
           Push-Up Battle
         </h1>
         <p className="text-muted-foreground text-sm font-body">
-          24-hour push-up challenge with friends
+          Real-time push-up challenge — works across devices!
         </p>
       </header>
 
@@ -469,20 +530,18 @@ export default function BattlePage() {
                     "linear-gradient(135deg, oklch(0.14 0.04 265), oklch(0.18 0.06 42 / 0.4))",
                 }}
               >
-                <div className="w-full h-36 overflow-hidden rounded-t-xl mb-0">
-                  <img
-                    src="/assets/generated/teens_pushup_battle.dim_800x500.jpg"
-                    alt="Teens doing push-up battle"
-                    className="w-full h-full object-cover object-center"
-                  />
-                </div>
-                <div className="p-6 pt-4">
+                <div className="p-6">
+                  <div className="text-6xl mb-3">⚔️</div>
                   <h2 className="font-display font-black text-2xl mb-2">
                     Challenge a Friend!
                   </h2>
                   <p className="text-sm text-muted-foreground font-body">
-                    Create a battle, share your code, and see who can do more
-                    push-ups in 24 hours.
+                    Create a battle, share your code. Both of you use your own
+                    camera — scores sync live across devices. Best reps in{" "}
+                    <span className="text-neon-green font-bold">
+                      20 minutes
+                    </span>{" "}
+                    wins!
                   </p>
                 </div>
               </div>
@@ -490,10 +549,15 @@ export default function BattlePage() {
               <Button
                 data-ocid="battle.create.button"
                 onClick={handleCreateBattle}
+                disabled={createBattle.isPending}
                 className="w-full h-14 bg-primary text-primary-foreground font-display font-bold text-lg glow-green"
               >
-                <Swords className="w-5 h-5 mr-2" />
-                Create Battle
+                {createBattle.isPending ? (
+                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                ) : (
+                  <Swords className="w-5 h-5 mr-2" />
+                )}
+                {createBattle.isPending ? "Creating..." : "Create Battle"}
               </Button>
 
               <Button
@@ -509,7 +573,7 @@ export default function BattlePage() {
           )}
 
           {/* ===== CREATE ===== */}
-          {battleState === "create" && currentBattle && (
+          {battleState === "create" && battleCode && (
             <motion.div
               key="create"
               initial={{ opacity: 0, y: 10 }}
@@ -526,12 +590,31 @@ export default function BattlePage() {
                   className="font-display font-black text-5xl tracking-[0.3em] text-neon-green py-3"
                   style={{ textShadow: "0 0 30px oklch(0.85 0.22 130 / 0.5)" }}
                 >
-                  {currentBattle.code}
+                  {battleCode}
                 </div>
                 <p className="text-xs text-muted-foreground font-body">
-                  Share this code with your friend. They have 24 hours to join
-                  and submit their score.
+                  Share this code with your friend. They enter it on their
+                  device to join your battle. You both have{" "}
+                  <span className="text-neon-orange font-bold">20 minutes</span>{" "}
+                  from when they join.
                 </p>
+                {battleData && (
+                  <div
+                    data-ocid="battle.status.panel"
+                    className={cn(
+                      "text-xs font-display font-bold px-3 py-1.5 rounded-full inline-block",
+                      battleData.status ===
+                        Variant_active_finished_waiting.waiting
+                        ? "bg-muted/40 text-muted-foreground"
+                        : "bg-primary/20 text-neon-green border border-primary/30",
+                    )}
+                  >
+                    {battleData.status ===
+                    Variant_active_finished_waiting.waiting
+                      ? "⏳ Waiting for opponent..."
+                      : "✅ Opponent joined!"}
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -592,7 +675,8 @@ export default function BattlePage() {
                   Enter Battle Code
                 </h2>
                 <p className="text-sm text-muted-foreground font-body">
-                  Ask your friend for their 6-character battle code.
+                  Ask your friend for their 6-character battle code. Works on
+                  any device!
                 </p>
                 <Input
                   data-ocid="battle.code.input"
@@ -606,9 +690,13 @@ export default function BattlePage() {
                 <Button
                   data-ocid="battle.join_submit.button"
                   onClick={handleJoinBattle}
+                  disabled={joinBattle.isPending}
                   className="w-full h-12 bg-primary text-primary-foreground font-display font-bold glow-green"
                 >
-                  Join Battle!
+                  {joinBattle.isPending ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : null}
+                  {joinBattle.isPending ? "Joining..." : "Join Battle!"}
                 </Button>
               </div>
               <Button
@@ -639,7 +727,7 @@ export default function BattlePage() {
                   className={cn(
                     "font-display font-bold text-sm",
                     timeRemaining < 60000
-                      ? "text-destructive"
+                      ? "text-destructive animate-pulse"
                       : "text-neon-orange",
                   )}
                 >
@@ -655,7 +743,7 @@ export default function BattlePage() {
                 <video
                   ref={videoRef}
                   className={cn(
-                    "w-full h-full object-cover scale-x-[-1]",
+                    "absolute inset-0 w-full h-full object-cover scale-x-[-1]",
                     isActive ? "opacity-100" : "opacity-0",
                   )}
                   playsInline
@@ -681,7 +769,7 @@ export default function BattlePage() {
                 {isActive && (
                   <div
                     className={cn(
-                      "absolute top-3 left-3 px-3 py-1 rounded-full border font-display font-bold text-xs",
+                      "absolute top-3 left-3 px-3 py-1 rounded-full border font-display font-bold text-xs z-10",
                       phaseColors[phase],
                       phase === "up"
                         ? "bg-primary/20 border-primary/30"
@@ -691,13 +779,19 @@ export default function BattlePage() {
                     {phaseLabels[phase]}
                   </div>
                 )}
+
+                {isActive && calibrating && (
+                  <div className="absolute bottom-3 left-3 right-3 z-20 bg-card/80 rounded-xl px-3 py-2 text-xs text-muted-foreground font-body text-center">
+                    Calibrating... get into push-up position
+                  </div>
+                )}
               </div>
 
               {/* Count + Opponent */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="card-sporty p-4 text-center">
                   <div className="text-xs text-muted-foreground font-body mb-1">
-                    You ({myName})
+                    You ({username})
                   </div>
                   <AnimatePresence mode="wait">
                     <motion.div
@@ -705,7 +799,10 @@ export default function BattlePage() {
                       initial={{ scale: 1.3, opacity: 0.7 }}
                       animate={{ scale: 1, opacity: 1 }}
                       transition={{ duration: 0.2, type: "spring" }}
-                      className="font-display font-black text-4xl text-neon-green"
+                      className={cn(
+                        "font-display font-black text-4xl transition-colors duration-150",
+                        repPulse ? "text-yellow-300" : "text-neon-green",
+                      )}
                       style={{
                         textShadow: "0 0 15px oklch(0.85 0.22 130 / 0.4)",
                       }}
@@ -717,25 +814,20 @@ export default function BattlePage() {
 
                 <div className="card-sporty p-4 text-center">
                   <div className="text-xs text-muted-foreground font-body mb-1">
-                    {opponentName ?? "Opponent"}
+                    Opponent
                   </div>
                   <div className="font-display font-black text-4xl text-neon-cyan">
-                    {opponentScore ?? "—"}
+                    {liveOpponentScore !== null && liveOpponentScore > 0
+                      ? liveOpponentScore
+                      : "—"}
                   </div>
-                  <Button
-                    data-ocid="battle.refresh.button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleRefreshOpponent}
-                    className="mt-1 h-6 text-xs text-muted-foreground px-2"
-                  >
-                    <RefreshCw className="w-3 h-3 mr-1" />
-                    Refresh
-                  </Button>
+                  <div className="text-xs text-muted-foreground font-body mt-1">
+                    live
+                  </div>
                 </div>
               </div>
 
-              {/* Manual + submit */}
+              {/* Manual adjust + submit */}
               <div className="flex gap-3">
                 <Button
                   variant="outline"
@@ -757,33 +849,11 @@ export default function BattlePage() {
                   Submit Score ({count} reps)
                 </Button>
               </div>
-
-              {detectorError && (
-                <div className="card-sporty p-3 text-xs text-muted-foreground font-body text-center">
-                  {detectorError} — use +/- to manually count.
-                  <div className="flex justify-center gap-2 mt-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCount((c) => Math.max(0, c - 1))}
-                    >
-                      -
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCount((c) => c + 1)}
-                    >
-                      +
-                    </Button>
-                  </div>
-                </div>
-              )}
             </motion.div>
           )}
 
           {/* ===== RESULT ===== */}
-          {battleState === "result" && currentBattle && (
+          {battleState === "result" && (
             <motion.div
               key="result"
               initial={{ opacity: 0, scale: 0.95 }}
@@ -791,7 +861,6 @@ export default function BattlePage() {
               exit={{ opacity: 0 }}
               className="space-y-4"
             >
-              {/* Winner Banner */}
               <div
                 data-ocid="battle.result.card"
                 className="card-sporty p-6 text-center relative overflow-hidden"
@@ -804,7 +873,6 @@ export default function BattlePage() {
                     : undefined,
                 }}
               >
-                {/* Confetti burst */}
                 {iWon && (
                   <div className="absolute inset-0 pointer-events-none overflow-hidden">
                     {["🎉", "⭐", "💪", "🏆", "✨", "🎊"].map((emoji, i) => (
@@ -837,7 +905,6 @@ export default function BattlePage() {
                 )}
               </div>
 
-              {/* Score Comparison */}
               <div className="grid grid-cols-2 gap-3">
                 <div
                   className={cn(
@@ -846,7 +913,7 @@ export default function BattlePage() {
                   )}
                 >
                   <div className="text-xs text-muted-foreground font-body mb-1">
-                    {myName} {iWon ? "👑" : ""}
+                    {username} {iWon ? "👑" : ""}
                   </div>
                   <div className="font-display font-black text-4xl text-neon-green">
                     {myScore}
@@ -858,20 +925,14 @@ export default function BattlePage() {
                 <div
                   className={cn(
                     "card-sporty p-4 text-center",
-                    !iWon &&
-                      opponentScore !== null &&
-                      myScore < opponentScore &&
-                      "ring-1 ring-neon-orange/50",
+                    !iWon && "ring-1 ring-neon-orange/50",
                   )}
                 >
                   <div className="text-xs text-muted-foreground font-body mb-1">
-                    {opponentName ?? "Opponent"}
-                    {!iWon && opponentScore !== null && myScore < opponentScore
-                      ? " 👑"
-                      : ""}
+                    Opponent {!iWon ? "👑" : ""}
                   </div>
                   <div className="font-display font-black text-4xl text-neon-cyan">
-                    {opponentScore ?? "—"}
+                    {opponentFinalScore}
                   </div>
                   <div className="text-xs text-muted-foreground font-body">
                     reps
@@ -905,7 +966,7 @@ export default function BattlePage() {
         open={shareOpen}
         onClose={() => setShareOpen(false)}
         repCount={myScore}
-        xpEarned={iWon ? count * 10 + 300 : count * 10}
+        xpEarned={iWon ? myScore * 10 + 300 : myScore * 10}
         username={username}
         tier={tierInfo.label}
       />

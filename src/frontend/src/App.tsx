@@ -1,19 +1,20 @@
 import { Toaster } from "@/components/ui/sonner";
-import { useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import AdBanner from "./components/AdBanner";
 import BottomNav from "./components/BottomNav";
 import { useInternetIdentity } from "./hooks/useInternetIdentity";
 import { useUserProfile } from "./hooks/useQueries";
-import AdminPage from "./pages/AdminPage";
-import AuthPage from "./pages/AuthPage";
-import BattlePage from "./pages/BattlePage";
-import DietPage from "./pages/DietPage";
-import ExercisesPage from "./pages/ExercisesPage";
-import HomePage from "./pages/HomePage";
-import LeaderboardPage from "./pages/LeaderboardPage";
-import ProfilePage from "./pages/ProfilePage";
-import PushUpCounterPage from "./pages/PushUpCounterPage";
-import TournamentsPage from "./pages/TournamentsPage";
+
+const HomePage = lazy(() => import("./pages/HomePage"));
+const ExercisesPage = lazy(() => import("./pages/ExercisesPage"));
+const PushUpCounterPage = lazy(() => import("./pages/PushUpCounterPage"));
+const TournamentsPage = lazy(() => import("./pages/TournamentsPage"));
+const ProfilePage = lazy(() => import("./pages/ProfilePage"));
+const BattlePage = lazy(() => import("./pages/BattlePage"));
+const DietPage = lazy(() => import("./pages/DietPage"));
+const AdminPage = lazy(() => import("./pages/AdminPage"));
+const LeaderboardPage = lazy(() => import("./pages/LeaderboardPage"));
+const AuthPage = lazy(() => import("./pages/AuthPage"));
 
 type Page =
   | "home"
@@ -26,34 +27,58 @@ type Page =
   | "admin"
   | "leaderboard";
 
+function PageLoader() {
+  return (
+    <div className="min-h-screen gradient-mesh flex items-center justify-center">
+      <div className="w-8 h-8 border-2 border-neon-green border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+}
+
 export default function App() {
   const [currentPage, setCurrentPage] = useState<Page>("home");
   const { identity, isInitializing } = useInternetIdentity();
   const { data: profile, isLoading: profileLoading } = useUserProfile();
 
-  // Check for tournament success redirect
+  // Hard timeout: if loading screen shows for more than 4s, force proceed
+  const [loadingTimedOut, setLoadingTimedOut] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const isAuthenticated = !!identity;
+  const hasProfile = !!profile;
+  const isWaiting =
+    isInitializing || (isAuthenticated && profileLoading && !profile);
+
+  useEffect(() => {
+    if (isWaiting && !loadingTimedOut) {
+      timerRef.current = setTimeout(() => setLoadingTimedOut(true), 8000);
+    } else {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    }
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [isWaiting, loadingTimedOut]);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tournamentSuccess = params.get("tournament_success");
     if (tournamentSuccess) {
       setCurrentPage("tournaments");
-      // Clean the URL
       window.history.replaceState({}, "", window.location.pathname);
     }
   }, []);
 
-  // Show auth page if not logged in or profile not set up
-  const isAuthenticated = !!identity;
-  const hasProfile = !!profile;
   const showAuth =
     !isInitializing &&
     (!isAuthenticated || (isAuthenticated && !profileLoading && !hasProfile));
 
-  if (isInitializing || (isAuthenticated && profileLoading && !profile)) {
+  // Show startup splash only while loading AND not yet timed out
+  if (isWaiting && !loadingTimedOut) {
     return (
       <div className="min-h-screen gradient-mesh flex items-center justify-center">
         <div className="text-center">
-          <div className="font-display text-4xl font-black mb-2">
+          <div className="font-display text-4xl font-black mb-4">
             TEEN<span className="text-neon-green">TUFF</span>LIFTS
           </div>
           <div className="flex justify-center">
@@ -64,12 +89,12 @@ export default function App() {
     );
   }
 
-  if (showAuth) {
+  if (showAuth || loadingTimedOut) {
     return (
-      <>
+      <Suspense fallback={<PageLoader />}>
         <AuthPage />
         <Toaster richColors position="top-center" />
-      </>
+      </Suspense>
     );
   }
 
@@ -100,7 +125,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-background relative">
-      {renderPage()}
+      <Suspense fallback={<PageLoader />}>{renderPage()}</Suspense>
       <BottomNav current={currentPage} onNavigate={setCurrentPage} />
       <AdBanner />
       <Toaster richColors position="top-center" />

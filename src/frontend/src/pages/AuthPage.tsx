@@ -3,20 +3,51 @@ import { Input } from "@/components/ui/input";
 import { useQueryClient } from "@tanstack/react-query";
 import { Loader2, ShieldCheck, Zap } from "lucide-react";
 import { motion } from "motion/react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useActor } from "../hooks/useActor";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import { useRegisterUser, useUserProfile } from "../hooks/useQueries";
 
+function getErrText(err: unknown): string {
+  if (err instanceof Error) return `${err.message} ${String(err)}`;
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return String(err);
+  }
+}
+
 export default function AuthPage() {
   const { login, loginStatus, isLoggingIn, identity } = useInternetIdentity();
+  const { actor, isFetching: actorFetching } = useActor();
   const { data: profile, isLoading: profileLoading } = useUserProfile();
   const { mutateAsync: registerUser, isPending: isRegistering } =
     useRegisterUser();
   const queryClient = useQueryClient();
   const [username, setUsername] = useState("");
   const [error, setError] = useState("");
+  const [loadingTimedOut, setLoadingTimedOut] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const needsUsername = !!identity && !profileLoading && !profile;
+  const isStillLoading =
+    !!identity && (actorFetching || profileLoading) && !loadingTimedOut;
+
+  useEffect(() => {
+    if (isStillLoading) {
+      timerRef.current = setTimeout(() => setLoadingTimedOut(true), 6000);
+    } else {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      setLoadingTimedOut(false);
+    }
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [isStillLoading]);
+
+  const actorReady = !!actor && !actorFetching;
+  const needsUsername =
+    !!identity &&
+    (loadingTimedOut || (actorReady && !profileLoading && !profile));
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,20 +63,12 @@ export default function AuthPage() {
     setError("");
     try {
       await registerUser(trimmed);
-      // Force a profile refetch after a short delay as a safety net
       setTimeout(() => {
         queryClient.refetchQueries({ queryKey: ["userProfile"] });
       }, 1500);
     } catch (err: unknown) {
-      const msg = (() => {
-        try {
-          return JSON.stringify(err);
-        } catch {
-          return String(err);
-        }
-      })();
+      const msg = getErrText(err);
       if (msg.toLowerCase().includes("already registered")) {
-        // User already exists — force a profile reload
         queryClient.refetchQueries({ queryKey: ["userProfile"] });
         return;
       }
@@ -53,10 +76,18 @@ export default function AuthPage() {
     }
   };
 
-  if (profileLoading && identity) {
+  if (isStillLoading) {
     return (
       <div className="min-h-screen gradient-mesh flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-neon-green" />
+        <div className="text-center">
+          <div className="font-display text-2xl font-black mb-4">
+            TEEN<span className="text-neon-green">TUFF</span>LIFTS
+          </div>
+          <Loader2 className="w-8 h-8 animate-spin text-neon-green mx-auto" />
+          <p className="text-muted-foreground mt-2 font-body text-sm">
+            Loading your profile...
+          </p>
+        </div>
       </div>
     );
   }
@@ -83,7 +114,7 @@ export default function AuthPage() {
           </p>
         </motion.div>
 
-        {/* Stats teaser */}
+        {/* Stats teaser - polished pills */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -91,11 +122,33 @@ export default function AuthPage() {
           className="grid grid-cols-3 gap-3 w-full max-w-sm mb-8"
         >
           {[
-            { emoji: "🏆", label: "Tournaments", value: "Win Prizes" },
-            { emoji: "⭐", label: "Earn XP", value: "Level Up" },
-            { emoji: "📸", label: "Push-Ups", value: "AI Counter" },
+            {
+              emoji: "🏆",
+              label: "Tournaments",
+              value: "Win Prizes",
+              glow: "shadow-[0_0_14px_oklch(0.72_0.22_42/0.3)]",
+            },
+            {
+              emoji: "⭐",
+              label: "Earn XP",
+              value: "Level Up",
+              glow: "shadow-[0_0_14px_oklch(0.85_0.22_130/0.3)]",
+            },
+            {
+              emoji: "📸",
+              label: "Push-Ups",
+              value: "AI Counter",
+              glow: "shadow-[0_0_14px_oklch(0.75_0.18_195/0.3)]",
+            },
           ].map((stat) => (
-            <div key={stat.label} className="card-sporty text-center p-3">
+            <div
+              key={stat.label}
+              className={`rounded-2xl text-center p-3 border border-border/60 bg-card/80 backdrop-blur-sm ${stat.glow}`}
+              style={{
+                background:
+                  "linear-gradient(145deg, oklch(0.18 0.03 265), oklch(0.16 0.025 265))",
+              }}
+            >
               <div className="text-2xl mb-1">{stat.emoji}</div>
               <div className="font-display text-xs font-bold text-neon-green">
                 {stat.value}

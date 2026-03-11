@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
+  Battle,
   Exercise,
   ExerciseCategory,
   LeaderboardEntry,
@@ -8,22 +9,34 @@ import type {
 } from "../backend.d";
 import { useActor } from "./useActor";
 
+function getErrText(err: unknown): string {
+  if (err instanceof Error) return `${err.message} ${String(err)}`;
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return String(err);
+  }
+}
+
 // ===== USER PROFILE =====
 export function useUserProfile() {
   const { actor, isFetching } = useActor();
-  return useQuery<UserProfile | null>({
+  const isEnabled = !!actor && !isFetching;
+  const query = useQuery<UserProfile | null>({
     queryKey: ["userProfile"],
     queryFn: async () => {
       if (!actor) return null;
-      // Motoko optionals return as [] or [value] in JS — unwrap correctly
       const result = await actor.getCallerUserProfile();
       if (Array.isArray(result)) {
         return result.length > 0 ? (result[0] as UserProfile) : null;
       }
       return (result as UserProfile) ?? null;
     },
-    enabled: !!actor && !isFetching,
+    enabled: isEnabled,
   });
+  // When the query is disabled (actor not ready), don't report isLoading=true
+  // — that was causing the infinite loading spinner in App.tsx
+  return { ...query, isLoading: isEnabled ? query.isLoading : false };
 }
 
 export function useRegisterUser() {
@@ -35,27 +48,14 @@ export function useRegisterUser() {
       try {
         await actor.registerUser(username);
       } catch (err: unknown) {
-        // ICP traps wrap messages as:
-        //   "Canister ... trapped with message: ..."
-        // so the "already registered" text may be buried deep in a
-        // nested object or stringified blob. Recursively stringify the
-        // entire error so we catch every possible variation.
-        const fullText = (() => {
-          try {
-            return JSON.stringify(err);
-          } catch {
-            return String(err);
-          }
-        })();
+        const fullText = getErrText(err);
         if (fullText.toLowerCase().includes("already registered")) {
-          // not an error — user exists, just continue
-          return;
+          return; // silently succeed — profile exists
         }
         throw err;
       }
     },
     onSuccess: (_data, username) => {
-      // Optimistically set profile so App.tsx redirects immediately
       queryClient.setQueryData(["userProfile"], {
         username,
         xp: BigInt(0),
@@ -63,7 +63,6 @@ export function useRegisterUser() {
         tier: { bronze: null },
         adFreeUntil: BigInt(0),
       });
-      // Also trigger a background refetch to get authoritative data
       queryClient.invalidateQueries({ queryKey: ["userProfile"] });
     },
   });
@@ -93,7 +92,7 @@ export function useCanSeeAd() {
       return actor.canSeeAd();
     },
     enabled: !!actor && !isFetching,
-    refetchInterval: 30 * 60 * 1000, // refetch every 30 minutes
+    refetchInterval: 30 * 60 * 1000,
   });
 }
 
@@ -179,7 +178,6 @@ export interface Tournament {
   status: "active" | "ended";
 }
 
-// Static tournament data since there's no getTournaments() API
 export const DEMO_FREE_TOURNAMENTS: Tournament[] = [
   {
     id: BigInt(1),
@@ -367,10 +365,57 @@ export function useLeaderboard() {
         ).getLeaderboard();
         return result as LeaderboardEntry[];
       } catch {
-        // Backend may not have getLeaderboard yet — return empty
         return [];
       }
     },
     enabled: !!actor && !isFetching,
+  });
+}
+
+// ===== BATTLES =====
+export function useCreateBattle() {
+  const { actor } = useActor();
+  return useMutation({
+    mutationFn: async (code: string) => {
+      if (!actor) throw new Error("No actor");
+      await actor.createBattle(code);
+    },
+  });
+}
+
+export function useJoinBattle() {
+  const { actor } = useActor();
+  return useMutation({
+    mutationFn: async (code: string) => {
+      if (!actor) throw new Error("No actor");
+      await actor.joinBattle(code);
+    },
+  });
+}
+
+export function useUpdateBattleScore() {
+  const { actor } = useActor();
+  return useMutation({
+    mutationFn: async ({ code, score }: { code: string; score: bigint }) => {
+      if (!actor) throw new Error("No actor");
+      await actor.updateMyBattleScore(code, score);
+    },
+  });
+}
+
+export function useGetBattle(code: string | null) {
+  const { actor, isFetching } = useActor();
+  return useQuery<Battle | null>({
+    queryKey: ["battle", code],
+    queryFn: async () => {
+      if (!actor || !code) return null;
+      const result = await actor.getBattle(code);
+      if (Array.isArray(result)) {
+        return result.length > 0 ? (result[0] as Battle) : null;
+      }
+      return result as Battle | null;
+    },
+    enabled: !!actor && !!code && !isFetching,
+    refetchInterval: 3000,
   });
 }

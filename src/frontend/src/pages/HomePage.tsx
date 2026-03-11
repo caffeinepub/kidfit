@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Dumbbell, Flame, Star, Target, Trophy, User } from "lucide-react";
+import { Dumbbell, Star, Target, Trophy, User } from "lucide-react";
 import { motion } from "motion/react";
 import { Tier } from "../backend.d";
 import DailyMissionCard from "../components/DailyMissionCard";
@@ -102,7 +102,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
   };
 
   return (
-    <div className="flex flex-col min-h-screen gradient-mesh pb-32">
+    <div className="flex flex-col min-h-screen gradient-mesh pb-36">
       {/* Header */}
       <header className="px-4 pt-12 pb-4">
         <motion.div
@@ -135,12 +135,18 @@ export default function HomePage({ onNavigate }: HomePageProps) {
       </header>
 
       <main className="flex-1 px-4 space-y-4">
-        {/* XP Card */}
+        {/* XP Card - gradient variant */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1, duration: 0.4 }}
-          className="card-sporty p-5"
+          className="rounded-2xl p-5 border border-primary/25"
+          style={{
+            background:
+              "linear-gradient(135deg, oklch(0.18 0.04 265) 0%, oklch(0.2 0.07 150 / 0.6) 100%)",
+            boxShadow:
+              "0 0 30px oklch(0.85 0.22 130 / 0.12), inset 0 1px 0 oklch(0.85 0.22 130 / 0.1)",
+          }}
         >
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
@@ -199,46 +205,11 @@ export default function HomePage({ onNavigate }: HomePageProps) {
           </div>
         </motion.div>
 
-        {/* Stats Grid */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2, duration: 0.4 }}
-          className="grid grid-cols-2 gap-3"
-        >
-          <div className="card-sporty p-4 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-chart-5/20 flex items-center justify-center">
-              <Flame className="w-5 h-5 text-chart-5" />
-            </div>
-            <div>
-              <div className="font-display font-bold text-xl">
-                {isLoading ? "—" : level}
-              </div>
-              <div className="text-xs text-muted-foreground font-body">
-                Current Level
-              </div>
-            </div>
-          </div>
-          <div className="card-sporty p-4 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
-              <Star className="w-5 h-5 text-neon-green" />
-            </div>
-            <div>
-              <div className="font-display font-bold text-xl">
-                {isLoading ? "—" : xp.toLocaleString()}
-              </div>
-              <div className="text-xs text-muted-foreground font-body">
-                Total XP
-              </div>
-            </div>
-          </div>
-        </motion.div>
-
         {/* Quick Action Buttons */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3, duration: 0.4 }}
+          transition={{ delay: 0.2, duration: 0.4 }}
         >
           <h2 className="font-display font-bold text-base text-muted-foreground mb-3 uppercase tracking-wider">
             Quick Actions
@@ -251,7 +222,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                   key={action.id}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.35 + i * 0.05, duration: 0.3 }}
+                  transition={{ delay: 0.25 + i * 0.05, duration: 0.3 }}
                 >
                   <Button
                     data-ocid={action.ocid}
@@ -284,7 +255,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5, duration: 0.4 }}
+          transition={{ delay: 0.45, duration: 0.4 }}
           className="card-sporty p-5 relative overflow-hidden"
           style={{
             background:

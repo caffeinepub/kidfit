@@ -47,6 +47,19 @@ export const ShoppingItem = IDL.Record({
   'productDescription' : IDL.Text,
 });
 export const Time = IDL.Int;
+export const Battle = IDL.Record({
+  'status' : IDL.Variant({
+    'active' : IDL.Null,
+    'finished' : IDL.Null,
+    'waiting' : IDL.Null,
+  }),
+  'creator' : IDL.Principal,
+  'expiresAt' : Time,
+  'creatorScore' : IDL.Nat,
+  'code' : IDL.Text,
+  'challengerScore' : IDL.Nat,
+  'challenger' : IDL.Opt(IDL.Principal),
+});
 export const Tier = IDL.Variant({
   'bronze' : IDL.Null,
   'gold' : IDL.Null,
@@ -59,6 +72,13 @@ export const UserProfile = IDL.Record({
   'adFreeUntil' : Time,
   'username' : IDL.Text,
   'tier' : Tier,
+  'level' : IDL.Nat,
+});
+export const LeaderboardEntry = IDL.Record({
+  'xp' : IDL.Nat,
+  'username' : IDL.Text,
+  'tier' : Tier,
+  'user' : IDL.Principal,
   'level' : IDL.Nat,
 });
 export const StripeSessionStatus = IDL.Variant({
@@ -105,6 +125,7 @@ export const idlService = IDL.Service({
   'addXp' : IDL.Func([IDL.Principal, IDL.Nat], [], []),
   'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
   'canSeeAd' : IDL.Func([], [IDL.Bool], ['query']),
+  'createBattle' : IDL.Func([IDL.Text], [], []),
   'createCheckoutSession' : IDL.Func(
       [IDL.Vec(ShoppingItem), IDL.Text, IDL.Text],
       [IDL.Text],
@@ -117,6 +138,7 @@ export const idlService = IDL.Service({
     ),
   'enterTournament' : IDL.Func([IDL.Nat], [], []),
   'finalizeTournament' : IDL.Func([IDL.Nat], [], []),
+  'getBattle' : IDL.Func([IDL.Text], [IDL.Opt(Battle)], ['query']),
   'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
   'getCategories' : IDL.Func([], [IDL.Vec(ExerciseCategory)], ['query']),
@@ -131,6 +153,7 @@ export const idlService = IDL.Service({
       [IDL.Vec(Exercise)],
       ['query'],
     ),
+  'getLeaderboard' : IDL.Func([], [IDL.Vec(LeaderboardEntry)], ['query']),
   'getProfile' : IDL.Func([IDL.Principal], [UserProfile], ['query']),
   'getStripeSessionStatus' : IDL.Func([IDL.Text], [StripeSessionStatus], []),
   'getTournamentLeaderboard' : IDL.Func(
@@ -145,6 +168,7 @@ export const idlService = IDL.Service({
     ),
   'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
   'isStripeConfigured' : IDL.Func([], [IDL.Bool], ['query']),
+  'joinBattle' : IDL.Func([IDL.Text], [], []),
   'logPushups' : IDL.Func([IDL.Nat], [], []),
   'logWorkoutSession' : IDL.Func([IDL.Nat, IDL.Nat], [], []),
   'recordAdView' : IDL.Func([], [], []),
@@ -157,6 +181,7 @@ export const idlService = IDL.Service({
       [TransformationOutput],
       ['query'],
     ),
+  'updateMyBattleScore' : IDL.Func([IDL.Text, IDL.Nat], [], []),
 });
 
 export const idlInitArgs = [];
@@ -201,6 +226,19 @@ export const idlFactory = ({ IDL }) => {
     'productDescription' : IDL.Text,
   });
   const Time = IDL.Int;
+  const Battle = IDL.Record({
+    'status' : IDL.Variant({
+      'active' : IDL.Null,
+      'finished' : IDL.Null,
+      'waiting' : IDL.Null,
+    }),
+    'creator' : IDL.Principal,
+    'expiresAt' : Time,
+    'creatorScore' : IDL.Nat,
+    'code' : IDL.Text,
+    'challengerScore' : IDL.Nat,
+    'challenger' : IDL.Opt(IDL.Principal),
+  });
   const Tier = IDL.Variant({
     'bronze' : IDL.Null,
     'gold' : IDL.Null,
@@ -213,6 +251,13 @@ export const idlFactory = ({ IDL }) => {
     'adFreeUntil' : Time,
     'username' : IDL.Text,
     'tier' : Tier,
+    'level' : IDL.Nat,
+  });
+  const LeaderboardEntry = IDL.Record({
+    'xp' : IDL.Nat,
+    'username' : IDL.Text,
+    'tier' : Tier,
+    'user' : IDL.Principal,
     'level' : IDL.Nat,
   });
   const StripeSessionStatus = IDL.Variant({
@@ -256,6 +301,7 @@ export const idlFactory = ({ IDL }) => {
     'addXp' : IDL.Func([IDL.Principal, IDL.Nat], [], []),
     'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
     'canSeeAd' : IDL.Func([], [IDL.Bool], ['query']),
+    'createBattle' : IDL.Func([IDL.Text], [], []),
     'createCheckoutSession' : IDL.Func(
         [IDL.Vec(ShoppingItem), IDL.Text, IDL.Text],
         [IDL.Text],
@@ -268,6 +314,7 @@ export const idlFactory = ({ IDL }) => {
       ),
     'enterTournament' : IDL.Func([IDL.Nat], [], []),
     'finalizeTournament' : IDL.Func([IDL.Nat], [], []),
+    'getBattle' : IDL.Func([IDL.Text], [IDL.Opt(Battle)], ['query']),
     'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
     'getCategories' : IDL.Func([], [IDL.Vec(ExerciseCategory)], ['query']),
@@ -282,6 +329,7 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Vec(Exercise)],
         ['query'],
       ),
+    'getLeaderboard' : IDL.Func([], [IDL.Vec(LeaderboardEntry)], ['query']),
     'getProfile' : IDL.Func([IDL.Principal], [UserProfile], ['query']),
     'getStripeSessionStatus' : IDL.Func([IDL.Text], [StripeSessionStatus], []),
     'getTournamentLeaderboard' : IDL.Func(
@@ -296,6 +344,7 @@ export const idlFactory = ({ IDL }) => {
       ),
     'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
     'isStripeConfigured' : IDL.Func([], [IDL.Bool], ['query']),
+    'joinBattle' : IDL.Func([IDL.Text], [], []),
     'logPushups' : IDL.Func([IDL.Nat], [], []),
     'logWorkoutSession' : IDL.Func([IDL.Nat, IDL.Nat], [], []),
     'recordAdView' : IDL.Func([], [], []),
@@ -308,6 +357,7 @@ export const idlFactory = ({ IDL }) => {
         [TransformationOutput],
         ['query'],
       ),
+    'updateMyBattleScore' : IDL.Func([IDL.Text, IDL.Nat], [], []),
   });
 };
 

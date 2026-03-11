@@ -1,5 +1,4 @@
 import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Crown, Medal, Trophy, Zap } from "lucide-react";
 import { motion } from "motion/react";
@@ -92,7 +91,7 @@ export default function LeaderboardPage() {
             </div>
             <div>
               <h1 className="font-display text-xl font-black text-foreground tracking-tight">
-                LEADERBOARD
+                Leaderboard
               </h1>
               <p className="text-xs text-muted-foreground font-body">
                 Global rankings by XP

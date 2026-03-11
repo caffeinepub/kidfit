@@ -1,26 +1,27 @@
 import Array "mo:core/Array";
-import Iter "mo:core/Iter";
 import List "mo:core/List";
-import Time "mo:core/Time";
+import Map "mo:core/Map";
+import Iter "mo:core/Iter";
 import Text "mo:core/Text";
 import Nat "mo:core/Nat";
+import Time "mo:core/Time";
 import Int "mo:core/Int";
 import Principal "mo:core/Principal";
 import Order "mo:core/Order";
-import Map "mo:core/Map";
 import Authorization "authorization/access-control";
 import MixinAuthorization "authorization/MixinAuthorization";
 import Stripe "stripe/stripe";
 import OutCall "http-outcalls/outcall";
-
 import Runtime "mo:core/Runtime";
 
-// Apply migration on upgrades to new version [runs with every new deployment]
+
+// Battle type definition and migration applied via `with` clause
 
 actor {
   // Enums
   type Tier = { #bronze; #silver; #gold; #platinum; #diamond };
   type Difficulty = { #easy; #medium; #hard };
+  type MissionKey = Text; // "principalText:missionId:date"
 
   // Core Types
   public type UserProfile = {
@@ -78,6 +79,16 @@ actor {
     fat : Nat;
   };
 
+  public type Battle = {
+    code : Text;
+    creator : Principal;
+    challenger : ?Principal;
+    creatorScore : Nat;
+    challengerScore : Nat;
+    status : { #waiting; #active; #finished };
+    expiresAt : Time.Time;
+  };
+
   // Persistent State
   let profiles = Map.empty<Principal, UserProfile>();
   let exerciseCategories = Map.empty<Text, ExerciseCategory>();
@@ -87,6 +98,7 @@ actor {
   let tournamentEntries = Map.empty<Nat, List.List<TournamentEntry>>();
   let adViews = Map.empty<Principal, List.List<Time.Time>>();
   let dietEntries = Map.empty<Nat, DietEntry>();
+  let battles = Map.empty<Text, Battle>();
   var nextExerciseId = 0;
   var nextTournamentId = 0;
   var nextDietEntryId = 0;
@@ -477,5 +489,75 @@ actor {
 
   public query ({ caller }) func transform(input : OutCall.TransformationInput) : async OutCall.TransformationOutput {
     OutCall.transform(input);
+  };
+
+  // *** Multiplayer - Cross-device Battles ***
+  public shared ({ caller }) func createBattle(code : Text) : async () {
+    if (not (Authorization.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can create battles");
+    };
+    if (battles.containsKey(code)) { Runtime.trap("Code already exists") };
+    let battle : Battle = {
+      code;
+      creator = caller;
+      challenger = null;
+      creatorScore = 0;
+      challengerScore = 0;
+      status = #waiting;
+      expiresAt = Time.now() + 20 * 60 * 1000000000; // 20 minutes nanoseconds
+    };
+    battles.add(code, battle);
+  };
+
+  public shared ({ caller }) func joinBattle(code : Text) : async () {
+    if (not (Authorization.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can join battles");
+    };
+    let battle = switch (battles.get(code)) {
+      case (null) { Runtime.trap("Battle code not found") };
+      case (?b) { b };
+    };
+    if (battle.creator == caller) { Runtime.trap("Cannot join your own battle") };
+    if (battle.status != #waiting) { Runtime.trap("Battle already started") };
+    let updated : Battle = {
+      code = battle.code;
+      creator = battle.creator;
+      challenger = ?caller;
+      creatorScore = battle.creatorScore;
+      challengerScore = battle.challengerScore;
+      status = #active;
+      expiresAt = battle.expiresAt;
+    };
+    battles.add(code, updated);
+  };
+
+  public shared ({ caller }) func updateMyBattleScore(code : Text, score : Nat) : async () {
+    if (not (Authorization.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can update battle scores");
+    };
+    let battle = switch (battles.get(code)) {
+      case (null) { Runtime.trap("Battle not found") };
+      case (?b) { b };
+    };
+    if (Time.now() > battle.expiresAt) { Runtime.trap("Battle expired") };
+    let updated = switch (battle.challenger) {
+      case (null) { Runtime.trap("Battle not started") };
+      case (?challenger) {
+        if (caller == battle.creator) {
+          {
+            battle with creatorScore = score;
+          };
+        } else if (caller == challenger) {
+          {
+            battle with challengerScore = score;
+          };
+        } else { Runtime.trap("Only participants can update scores") };
+      };
+    };
+    battles.add(code, updated);
+  };
+
+  public query ({ caller }) func getBattle(code : Text) : async ?Battle {
+    battles.get(code);
   };
 };

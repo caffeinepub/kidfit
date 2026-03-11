@@ -10,6 +10,17 @@ import type { ActorMethod } from '@icp-sdk/core/agent';
 import type { IDL } from '@icp-sdk/core/candid';
 import type { Principal } from '@icp-sdk/core/principal';
 
+export interface Battle {
+  'status' : { 'active' : null } |
+    { 'finished' : null } |
+    { 'waiting' : null },
+  'creator' : Principal,
+  'expiresAt' : Time,
+  'creatorScore' : bigint,
+  'code' : string,
+  'challengerScore' : bigint,
+  'challenger' : [] | [Principal],
+}
 export interface DietEntry {
   'id' : bigint,
   'fat' : bigint,
@@ -31,6 +42,13 @@ export interface Exercise {
   'category' : string,
 }
 export interface ExerciseCategory { 'name' : string, 'description' : string }
+export interface LeaderboardEntry {
+  'xp' : bigint,
+  'username' : string,
+  'tier' : Tier,
+  'user' : Principal,
+  'level' : bigint,
+}
 export interface ShoppingItem {
   'productName' : string,
   'currency' : string,
@@ -91,6 +109,7 @@ export interface _SERVICE {
   'addXp' : ActorMethod<[Principal, bigint], undefined>,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
   'canSeeAd' : ActorMethod<[], boolean>,
+  'createBattle' : ActorMethod<[string], undefined>,
   'createCheckoutSession' : ActorMethod<
     [Array<ShoppingItem>, string, string],
     string
@@ -101,18 +120,21 @@ export interface _SERVICE {
   >,
   'enterTournament' : ActorMethod<[bigint], undefined>,
   'finalizeTournament' : ActorMethod<[bigint], undefined>,
+  'getBattle' : ActorMethod<[string], [] | [Battle]>,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
   'getCategories' : ActorMethod<[], Array<ExerciseCategory>>,
   'getDietEntries' : ActorMethod<[], Array<DietEntry>>,
   'getDietEntriesByCategory' : ActorMethod<[string], Array<DietEntry>>,
   'getExercisesByCategory' : ActorMethod<[string], Array<Exercise>>,
+  'getLeaderboard' : ActorMethod<[], Array<LeaderboardEntry>>,
   'getProfile' : ActorMethod<[Principal], UserProfile>,
   'getStripeSessionStatus' : ActorMethod<[string], StripeSessionStatus>,
   'getTournamentLeaderboard' : ActorMethod<[bigint], Array<TournamentEntry>>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
   'isStripeConfigured' : ActorMethod<[], boolean>,
+  'joinBattle' : ActorMethod<[string], undefined>,
   'logPushups' : ActorMethod<[bigint], undefined>,
   'logWorkoutSession' : ActorMethod<[bigint, bigint], undefined>,
   'recordAdView' : ActorMethod<[], undefined>,
@@ -121,6 +143,7 @@ export interface _SERVICE {
   'setStripeConfiguration' : ActorMethod<[StripeConfiguration], undefined>,
   'submitTournamentScore' : ActorMethod<[bigint, bigint], undefined>,
   'transform' : ActorMethod<[TransformationInput], TransformationOutput>,
+  'updateMyBattleScore' : ActorMethod<[string, bigint], undefined>,
 }
 export declare const idlService: IDL.ServiceClass;
 export declare const idlInitArgs: IDL.Type[];

@@ -19,158 +19,163 @@ import ShareResultModal from "../components/ShareResultModal";
 import { useLogPushups, useUserProfile } from "../hooks/useQueries";
 import { getTierFromXp } from "../lib/xp";
 
-// ===== Push-up detection state machine =====
 type PosePhase = "up" | "down" | "unknown";
 
-interface PosePoint {
-  x: number;
-  y: number;
-  score: number;
+// ─── Lightweight motion-based push-up detector ───────────────────────────────
+// No external ML libraries — uses canvas pixel analysis to track the vertical
+// centroid of motion in the frame. Loads instantly on any device.
+
+const SAMPLE_ROWS = 40; // vertical resolution for centroid sampling
+const MOTION_THRESH = 6; // lowered: more sensitive on mobile // pixel-difference threshold to count as motion
+const STABLE_FRAMES = 3; // lowered: faster phase commit // consecutive frames required before phase commit
+const MIN_REP_MS = 700; // lowered: faster rep registration // minimum ms between reps
+const PHASE_HYSTERESIS = 0.07; // lowered: detects smaller range // fraction of frame height between UP/DOWN zones
+
+interface MotionState {
+  prevGray: Uint8Array | null;
+  phase: PosePhase;
+  stablePhase: PosePhase;
+  stableCount: number;
+  seenDown: boolean;
+  lastRepTime: number;
+  lastTransition: number;
+  // rolling baseline of centroid position for auto-calibration
+  centroidHistory: number[];
+}
+
+function makeMotionState(): MotionState {
+  return {
+    prevGray: null,
+    phase: "unknown",
+    stablePhase: "unknown",
+    stableCount: 0,
+    seenDown: false,
+    lastRepTime: 0,
+    lastTransition: 0,
+    centroidHistory: [],
+  };
 }
 
 /**
- * Front-camera nose-based push-up phase detection.
- *
- * MoveNet keypoint indices:
- *   0  = nose
- *   5  = left shoulder
- *   6  = right shoulder
- *   11 = left hip
- *   12 = right hip
- *
- * When facing the camera and doing a push-up:
- *   UP position   → nose is HIGH (lower Y value)
- *   DOWN position → nose drops toward shoulders/floor (higher Y value)
- *
- * We normalise by (hipY - shoulderY) to be camera-distance agnostic.
+ * Analyse one video frame. Returns the committed phase and whether a new rep
+ * was counted. Mutates `state` in place.
  */
-function estimatePushupPhase(
-  keypoints: PosePoint[],
-  prevShoulderY: number | null,
-): { phase: PosePhase; shoulderY: number | null; noseRelative: number | null } {
-  const MIN_SCORE = 0.1; // very low to work on phones
+function analyseFrame(
+  video: HTMLVideoElement,
+  offscreenCtx: CanvasRenderingContext2D,
+  state: MotionState,
+): { phase: PosePhase; repCounted: boolean } {
+  const W = offscreenCtx.canvas.width;
+  const H = offscreenCtx.canvas.height;
 
-  const nose = keypoints[0];
-  const lShoulder = keypoints[5];
-  const rShoulder = keypoints[6];
-  const lHip = keypoints[11];
-  const rHip = keypoints[12];
+  offscreenCtx.drawImage(video, 0, 0, W, H);
+  const imgData = offscreenCtx.getImageData(0, 0, W, H);
+  const data = imgData.data;
 
-  const lShoulderOk = lShoulder?.score >= MIN_SCORE;
-  const rShoulderOk = rShoulder?.score >= MIN_SCORE;
-  const lHipOk = lHip?.score >= MIN_SCORE;
-  const rHipOk = rHip?.score >= MIN_SCORE;
-  const noseOk = nose?.score >= MIN_SCORE;
+  // Convert to grayscale
+  const gray = new Uint8Array(W * H);
+  for (let i = 0; i < W * H; i++) {
+    const r = data[i * 4];
+    const g = data[i * 4 + 1];
+    const b = data[i * 4 + 2];
+    gray[i] = (r * 77 + g * 150 + b * 29) >> 8;
+  }
 
-  // ── Primary: nose relative to shoulders ─────────────────────────────────
-  if (noseOk && (lShoulderOk || rShoulderOk) && (lHipOk || rHipOk)) {
-    const shoulderY =
-      lShoulderOk && rShoulderOk
-        ? (lShoulder.y + rShoulder.y) / 2
-        : lShoulderOk
-          ? lShoulder.y
-          : rShoulder.y;
+  let phase: PosePhase = state.phase;
+  let repCounted = false;
 
-    const hipY =
-      lHipOk && rHipOk ? (lHip.y + rHip.y) / 2 : lHipOk ? lHip.y : rHip.y;
+  if (state.prevGray !== null) {
+    // Compute per-row motion magnitude
+    const rowH = Math.floor(H / SAMPLE_ROWS);
+    let motionSum = 0;
+    let centroidNumer = 0;
 
-    const range = hipY - shoulderY;
+    for (let row = 0; row < SAMPLE_ROWS; row++) {
+      let rowMotion = 0;
+      const y0 = row * rowH;
+      for (let y = y0; y < y0 + rowH; y++) {
+        for (let x = 0; x < W; x++) {
+          const idx = y * W + x;
+          rowMotion += Math.abs(gray[idx] - state.prevGray[idx]);
+        }
+      }
+      rowMotion /= rowH * W; // normalise
+      if (rowMotion > MOTION_THRESH / 10) {
+        motionSum += rowMotion;
+        centroidNumer += rowMotion * (row / SAMPLE_ROWS);
+      }
+    }
 
-    if (range < 20) {
-      // body too flat / not enough range to detect, fall through
-    } else {
-      const noseRelative = (nose.y - shoulderY) / range;
-      // noseRelative < 0.15  → nose well above/at shoulders = UP
-      // noseRelative > 0.35  → nose has dropped toward ground = DOWN
-      let phase: PosePhase = "unknown";
-      if (noseRelative < 0.15) phase = "up";
-      else if (noseRelative > 0.35) phase = "down";
-      return { phase, shoulderY, noseRelative };
+    if (motionSum > 0) {
+      const centroid = centroidNumer / motionSum; // 0 = top, 1 = bottom
+
+      // Maintain rolling history of centroids for auto-calibration
+      state.centroidHistory.push(centroid);
+      if (state.centroidHistory.length > 60) state.centroidHistory.shift();
+
+      if (state.centroidHistory.length >= 6) {
+        const sorted = [...state.centroidHistory].sort((a, b) => a - b);
+        const lo = sorted[Math.floor(sorted.length * 0.15)];
+        const hi = sorted[Math.floor(sorted.length * 0.85)];
+        const range = hi - lo;
+
+        let rawPhase: PosePhase = "unknown";
+        if (range > PHASE_HYSTERESIS) {
+          // UP = centroid high in frame (small y fraction)
+          // DOWN = centroid low in frame (large y fraction)
+          const upThreshold = lo + range * 0.35;
+          const downThreshold = lo + range * 0.65;
+          if (centroid <= upThreshold) rawPhase = "up";
+          else if (centroid >= downThreshold) rawPhase = "down";
+        }
+
+        // Require STABLE_FRAMES consecutive same-phase frames
+        if (rawPhase !== "unknown") {
+          if (rawPhase === state.stablePhase) {
+            state.stableCount += 1;
+          } else {
+            state.stablePhase = rawPhase;
+            state.stableCount = 1;
+          }
+
+          const now = Date.now();
+          if (
+            state.stableCount >= STABLE_FRAMES &&
+            rawPhase !== state.phase &&
+            now - state.lastTransition > 500
+          ) {
+            state.phase = rawPhase;
+            state.lastTransition = now;
+            phase = rawPhase;
+
+            if (rawPhase === "down") {
+              state.seenDown = true;
+            }
+
+            if (
+              rawPhase === "up" &&
+              state.seenDown &&
+              now - state.lastRepTime > MIN_REP_MS
+            ) {
+              repCounted = true;
+              state.seenDown = false;
+              state.lastRepTime = now;
+            }
+          } else {
+            phase = state.phase;
+          }
+        } else {
+          phase = state.phase;
+        }
+      }
     }
   }
 
-  // ── Fallback: shoulder Y movement across frames ───────────────────────────
-  if (lShoulderOk || rShoulderOk) {
-    const curShoulderY =
-      lShoulderOk && rShoulderOk
-        ? (lShoulder.y + rShoulder.y) / 2
-        : lShoulderOk
-          ? lShoulder.y
-          : rShoulder.y;
-
-    if (prevShoulderY !== null) {
-      const delta = curShoulderY - prevShoulderY; // positive = moving down in image
-      if (delta > 8)
-        return { phase: "down", shoulderY: curShoulderY, noseRelative: null };
-      if (delta < -8)
-        return { phase: "up", shoulderY: curShoulderY, noseRelative: null };
-    }
-    return { phase: "unknown", shoulderY: curShoulderY, noseRelative: null };
-  }
-
-  return { phase: "unknown", shoulderY: null, noseRelative: null };
+  state.prevGray = gray;
+  return { phase, repCounted };
 }
 
-/** Draw skeleton overlay on canvas */
-function drawSkeleton(
-  ctx: CanvasRenderingContext2D,
-  keypoints: PosePoint[],
-  canvasWidth: number,
-  canvasHeight: number,
-) {
-  // Map normalised [0,1] coords to canvas pixels
-  const px = (kp: PosePoint) => kp.x * canvasWidth;
-  const py = (kp: PosePoint) => kp.y * canvasHeight;
-
-  const dotColor = (score: number) => {
-    if (score >= 0.5) return "#00ff88"; // bright green = high confidence
-    if (score >= 0.2) return "#ffdd00"; // yellow = medium
-    return "#ff4444"; // red = low
-  };
-
-  // Bones to draw: [from_idx, to_idx]
-  const bones: [number, number][] = [
-    [5, 6], // shoulders
-    [5, 11], // left shoulder → left hip
-    [6, 12], // right shoulder → right hip
-    [11, 12], // hips
-    [5, 7], // left shoulder → left elbow
-    [6, 8], // right shoulder → right elbow
-    [7, 9], // left elbow → left wrist
-    [8, 10], // right elbow → right wrist
-    [0, 5], // nose → left shoulder
-    [0, 6], // nose → right shoulder
-  ];
-
-  ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-
-  // Draw bones
-  for (const [a, b] of bones) {
-    const kpA = keypoints[a];
-    const kpB = keypoints[b];
-    if (!kpA || !kpB) continue;
-    if (kpA.score < 0.1 || kpB.score < 0.1) continue;
-    ctx.beginPath();
-    ctx.moveTo(px(kpA), py(kpA));
-    ctx.lineTo(px(kpB), py(kpB));
-    ctx.strokeStyle = "rgba(0,255,136,0.45)";
-    ctx.lineWidth = 2;
-    ctx.stroke();
-  }
-
-  // Draw keypoint dots
-  for (let i = 0; i < Math.min(keypoints.length, 17); i++) {
-    const kp = keypoints[i];
-    if (!kp || kp.score < 0.1) continue;
-    ctx.beginPath();
-    ctx.arc(px(kp), py(kp), 5, 0, Math.PI * 2);
-    ctx.fillStyle = dotColor(kp.score);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(0,0,0,0.5)";
-    ctx.lineWidth = 1;
-    ctx.stroke();
-  }
-}
+// ─────────────────────────────────────────────────────────────────────────────
 
 export default function PushUpCounterPage() {
   const {
@@ -184,33 +189,24 @@ export default function PushUpCounterPage() {
     stopCamera,
   } = useCamera({
     facingMode: "user",
-    width: 640,
-    height: 480,
+    width: 320,
+    height: 240,
   });
 
   const [count, setCount] = useState(0);
   const [phase, setPhase] = useState<PosePhase>("unknown");
   const [isDetecting, setIsDetecting] = useState(false);
-  const [detectorReady, setDetectorReady] = useState(false);
   const [sessionStarted, setSessionStarted] = useState(false);
-  const [detectorError, setDetectorError] = useState<string | null>(null);
   const [countKey, setCountKey] = useState(0);
   const [repPulse, setRepPulse] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [lastSessionCount, setLastSessionCount] = useState(0);
-  const [noseRelativeDebug, setNoseRelativeDebug] = useState<number | null>(
-    null,
-  );
+  const [calibrating, setCalibrating] = useState(false);
 
-  const detectorRef = useRef<any>(null);
   const rafRef = useRef<number | null>(null);
-  const phaseRef = useRef<PosePhase>("unknown");
-  const lastTransitionRef = useRef<number>(0);
-  const seenDownRef = useRef<boolean>(false);
-  const lastRepTimeRef = useRef<number>(0);
-  const prevShoulderYRef = useRef<number | null>(null);
-  // overlay canvas (separate from the camera canvas)
-  const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
+  const offscreenRef = useRef<HTMLCanvasElement | null>(null);
+  const offscreenCtxRef = useRef<CanvasRenderingContext2D | null>(null);
+  const motionStateRef = useRef<MotionState>(makeMotionState());
 
   const { mutateAsync: logPushups, isPending: isLogging } = useLogPushups();
   const { data: profile } = useUserProfile();
@@ -218,180 +214,69 @@ export default function PushUpCounterPage() {
   const xp = profile ? Number(profile.xp) : 0;
   const tierInfo = getTierFromXp(xp);
 
-  // Load TensorFlow and MoveNet via CDN scripts (avoids bundler issues)
+  // Create offscreen canvas once
   useEffect(() => {
-    let cancelled = false;
-
-    function loadScript(src: string): Promise<void> {
-      return new Promise((resolve, reject) => {
-        if (document.querySelector(`script[src="${src}"]`)) {
-          resolve();
-          return;
-        }
-        const s = document.createElement("script");
-        s.src = src;
-        s.async = true;
-        s.onload = () => resolve();
-        s.onerror = () => reject(new Error(`Failed to load ${src}`));
-        document.head.appendChild(s);
-      });
-    }
-
-    async function loadDetector() {
-      try {
-        await loadScript(
-          "https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js",
-        );
-        await loadScript(
-          "https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection@2.1.3/dist/pose-detection.min.js",
-        );
-
-        const tf = (window as any).tf as { ready: () => Promise<void> };
-        const poseDetection = (window as any).poseDetection as {
-          createDetector: (
-            model: string,
-            config: Record<string, unknown>,
-          ) => Promise<unknown>;
-          SupportedModels: { MoveNet: string };
-          movenet: { modelType: { SINGLEPOSE_LIGHTNING: string } };
-        };
-
-        if (!tf || !poseDetection) throw new Error("TF not loaded");
-
-        await tf.ready();
-        const detector = await poseDetection.createDetector(
-          poseDetection.SupportedModels.MoveNet,
-          { modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING },
-        );
-
-        if (!cancelled) {
-          detectorRef.current = detector;
-          setDetectorReady(true);
-        }
-      } catch (err) {
-        console.warn("Could not load pose detector:", err);
-        if (!cancelled) {
-          setDetectorError("Pose detection unavailable. Use manual counting.");
-        }
-      }
-    }
-
-    loadDetector();
-    return () => {
-      cancelled = true;
-    };
+    const c = document.createElement("canvas");
+    c.width = 160;
+    c.height = 120;
+    offscreenRef.current = c;
+    offscreenCtxRef.current = c.getContext("2d", { willReadFrequently: true });
   }, []);
 
-  // Pose detection loop
-  const detectLoop = useCallback(async () => {
-    if (!detectorRef.current || !videoRef.current || !isActive) {
+  // Detection loop — pure canvas / pixel analysis, no CDN libs
+  const detectLoop = useCallback(() => {
+    const video = videoRef.current;
+    const ctx = offscreenCtxRef.current;
+    if (!video || !ctx || !isActive) {
       setIsDetecting(false);
       return;
     }
-
-    const video = videoRef.current;
     if (video.readyState < 2) {
       rafRef.current = requestAnimationFrame(detectLoop);
       return;
     }
 
-    try {
-      const poses = await detectorRef.current.estimatePoses(video);
+    const { phase: newPhase, repCounted } = analyseFrame(
+      video,
+      ctx,
+      motionStateRef.current,
+    );
 
-      if (poses.length > 0) {
-        const kps = poses[0].keypoints as PosePoint[];
+    setPhase(newPhase);
 
-        // Draw skeleton overlay
-        const overlay = overlayCanvasRef.current;
-        if (overlay) {
-          const ctx = overlay.getContext("2d");
-          if (ctx) {
-            drawSkeleton(ctx, kps, overlay.width, overlay.height);
-          }
-        }
-
-        const {
-          phase: newPhase,
-          shoulderY,
-          noseRelative,
-        } = estimatePushupPhase(kps, prevShoulderYRef.current);
-
-        if (shoulderY !== null) prevShoulderYRef.current = shoulderY;
-        if (noseRelative !== null) setNoseRelativeDebug(noseRelative);
-
-        const now = Date.now();
-
-        // Debounce transitions — 200ms
-        if (
-          newPhase !== "unknown" &&
-          newPhase !== phaseRef.current &&
-          now - lastTransitionRef.current > 200
-        ) {
-          phaseRef.current = newPhase;
-          setPhase(newPhase);
-          lastTransitionRef.current = now;
-
-          if (newPhase === "down") {
-            seenDownRef.current = true;
-          }
-
-          // Count a rep when we come back "up" after having been "down"
-          // Minimum rep duration: 600ms
-          if (
-            newPhase === "up" &&
-            seenDownRef.current &&
-            now - lastRepTimeRef.current > 600
-          ) {
-            setCount((c) => c + 1);
-            setCountKey((k) => k + 1);
-            setRepPulse(true);
-            setTimeout(() => setRepPulse(false), 400);
-            seenDownRef.current = false;
-            lastRepTimeRef.current = now;
-          }
-        }
-      }
-    } catch {
-      // silently continue
+    if (repCounted) {
+      setCount((c) => c + 1);
+      setCountKey((k) => k + 1);
+      setRepPulse(true);
+      setTimeout(() => setRepPulse(false), 400);
     }
 
     rafRef.current = requestAnimationFrame(detectLoop);
   }, [isActive, videoRef]);
 
   useEffect(() => {
-    if (isDetecting && isActive && detectorReady) {
+    if (isDetecting && isActive) {
+      // Short calibration window
+      setCalibrating(true);
+      const t = setTimeout(() => setCalibrating(false), 3000);
       rafRef.current = requestAnimationFrame(detectLoop);
+      return () => {
+        clearTimeout(t);
+        if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      };
     }
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [isDetecting, isActive, detectorReady, detectLoop]);
-
-  // Clear overlay when camera stops
-  useEffect(() => {
-    if (!isActive) {
-      const overlay = overlayCanvasRef.current;
-      if (overlay) {
-        const ctx = overlay.getContext("2d");
-        if (ctx) ctx.clearRect(0, 0, overlay.width, overlay.height);
-      }
-    }
-  }, [isActive]);
+  }, [isDetecting, isActive, detectLoop]);
 
   const handleStart = async () => {
     setCount(0);
     setPhase("unknown");
-    phaseRef.current = "unknown";
-    lastTransitionRef.current = 0;
-    seenDownRef.current = false;
-    lastRepTimeRef.current = 0;
-    prevShoulderYRef.current = null;
-    setNoseRelativeDebug(null);
+    motionStateRef.current = makeMotionState();
     setSessionStarted(true);
     const ok = await startCamera();
-    if (ok) {
-      setIsDetecting(true);
-    }
+    if (ok) setIsDetecting(true);
   };
 
   const handleFinish = async () => {
@@ -404,7 +289,6 @@ export default function PushUpCounterPage() {
       toast.info("No reps detected. Try again!");
       return;
     }
-
     try {
       await logPushups(BigInt(count));
       toast.success(`💪 ${count} push-ups logged! +${count * 10} XP earned!`);
@@ -419,12 +303,9 @@ export default function PushUpCounterPage() {
   const handleReset = () => {
     setCount(0);
     setPhase("unknown");
-    phaseRef.current = "unknown";
-    lastTransitionRef.current = 0;
-    seenDownRef.current = false;
-    lastRepTimeRef.current = 0;
-    prevShoulderYRef.current = null;
-    setNoseRelativeDebug(null);
+    motionStateRef.current = makeMotionState();
+    setCalibrating(true);
+    setTimeout(() => setCalibrating(false), 3000);
   };
 
   const phaseIndicator = {
@@ -448,14 +329,13 @@ export default function PushUpCounterPage() {
 
   return (
     <div className="flex flex-col min-h-screen gradient-mesh pb-36">
-      {/* Header */}
       <header className="px-4 pt-12 pb-4">
         <h1 className="font-display text-2xl font-black flex items-center gap-2">
           <Target className="w-6 h-6 text-neon-cyan" />
           Push-Up Counter
         </h1>
         <p className="text-muted-foreground text-sm font-body">
-          AI camera detects your reps automatically
+          Camera detects your reps automatically
         </p>
       </header>
 
@@ -467,26 +347,12 @@ export default function PushUpCounterPage() {
             className={cn(
               "absolute inset-0 w-full h-full object-cover",
               isActive ? "opacity-100" : "opacity-0",
-              "scale-x-[-1]", // mirror for front camera
+              "scale-x-[-1]",
             )}
             playsInline
             muted
           />
-
-          {/* Hidden camera canvas (used by useCamera hook internally) */}
           <canvas ref={canvasRef} className="hidden" />
-
-          {/* Skeleton overlay canvas — visible over the video */}
-          <canvas
-            ref={overlayCanvasRef}
-            width={640}
-            height={480}
-            className={cn(
-              "absolute inset-0 w-full h-full pointer-events-none scale-x-[-1]",
-              isActive && detectorReady ? "opacity-100" : "opacity-0",
-            )}
-            style={{ transition: "opacity 0.3s" }}
-          />
 
           {!isActive && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-muted/80 z-10">
@@ -519,7 +385,7 @@ export default function PushUpCounterPage() {
             </div>
           )}
 
-          {/* Phase indicator overlay */}
+          {/* Phase indicator */}
           {isActive && (
             <div
               className={cn(
@@ -532,17 +398,10 @@ export default function PushUpCounterPage() {
             </div>
           )}
 
-          {/* Nose-relative debug value (small, top-right) */}
-          {isActive && noseRelativeDebug !== null && (
-            <div className="absolute top-3 right-3 z-20 px-2 py-0.5 rounded bg-black/60 text-white text-[10px] font-mono">
-              nr: {noseRelativeDebug.toFixed(2)}
-            </div>
-          )}
-
-          {/* Detector loading overlay */}
-          {isActive && !detectorReady && !detectorError && (
+          {/* Calibrating overlay */}
+          {isActive && calibrating && (
             <div className="absolute bottom-3 left-3 right-3 z-20 bg-card/80 rounded-xl px-3 py-2 text-xs text-muted-foreground font-body text-center">
-              Loading pose detector...
+              Calibrating motion... get into push-up position
             </div>
           )}
         </div>
@@ -607,16 +466,37 @@ export default function PushUpCounterPage() {
                 • Make sure your head, shoulders, and hips are all visible
               </li>
               <li>• Do push-ups — go DOWN close to the floor, then push UP</li>
-              <li>
-                • The AI tracks your nose dropping and rising to count reps
-              </li>
+              <li>• Camera tracks your body movement to count reps</li>
               <li>• Good lighting helps — avoid strong backlight behind you</li>
             </ul>
-            {detectorError && (
-              <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3 text-xs text-destructive font-body">
-                {detectorError}
-              </div>
-            )}
+          </div>
+        )}
+
+        {/* Manual override during session */}
+        {sessionStarted && (
+          <div className="card-sporty p-3 flex items-center gap-3">
+            <Zap className="w-4 h-4 text-neon-orange shrink-0" />
+            <div className="text-xs text-muted-foreground font-body flex-1">
+              Not counting right? Tap + / - to adjust manually
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="icon"
+                className="w-8 h-8"
+                onClick={() => setCount((c) => Math.max(0, c - 1))}
+              >
+                -
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="w-8 h-8"
+                onClick={() => setCount((c) => c + 1)}
+              >
+                +
+              </Button>
+            </div>
           </div>
         )}
 
@@ -663,39 +543,7 @@ export default function PushUpCounterPage() {
           )}
         </div>
 
-        {/* Manual count tip */}
-        {sessionStarted && detectorError && (
-          <div className="card-sporty p-4 flex items-center gap-3">
-            <Zap className="w-5 h-5 text-neon-orange shrink-0" />
-            <div>
-              <div className="font-display font-bold text-sm">Manual Mode</div>
-              <div className="text-xs text-muted-foreground font-body">
-                Pose detection unavailable. Manually enter your reps using the
-                counter below.
-              </div>
-            </div>
-            <div className="flex items-center gap-2 ml-auto">
-              <Button
-                variant="outline"
-                size="icon"
-                className="w-8 h-8"
-                onClick={() => setCount((c) => Math.max(0, c - 1))}
-              >
-                -
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                className="w-8 h-8"
-                onClick={() => setCount((c) => c + 1)}
-              >
-                +
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* Share button (shown after session) */}
+        {/* Share button */}
         {!sessionStarted && lastSessionCount > 0 && (
           <Button
             variant="outline"

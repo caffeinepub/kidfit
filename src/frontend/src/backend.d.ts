@@ -15,6 +15,13 @@ export interface Exercise {
     targetReps: bigint;
     category: string;
 }
+export interface LeaderboardEntry {
+    xp: bigint;
+    username: string;
+    tier: Tier;
+    user: Principal;
+    level: bigint;
+}
 export interface TransformationOutput {
     status: bigint;
     body: Uint8Array;
@@ -76,6 +83,15 @@ export interface StripeConfiguration {
     allowedCountries: Array<string>;
     secretKey: string;
 }
+export interface Battle {
+    status: Variant_active_finished_waiting;
+    creator: Principal;
+    expiresAt: Time;
+    creatorScore: bigint;
+    code: string;
+    challengerScore: bigint;
+    challenger?: Principal;
+}
 export interface UserProfile {
     xp: bigint;
     adFreeUntil: Time;
@@ -100,6 +116,11 @@ export enum UserRole {
     user = "user",
     guest = "guest"
 }
+export enum Variant_active_finished_waiting {
+    active = "active",
+    finished = "finished",
+    waiting = "waiting"
+}
 export interface backendInterface {
     addDietEntry(entry: DietEntry): Promise<void>;
     addExercise(exercise: Exercise): Promise<void>;
@@ -107,23 +128,26 @@ export interface backendInterface {
     addXp(user: Principal, xp: bigint): Promise<void>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
     canSeeAd(): Promise<boolean>;
+    createBattle(code: string): Promise<void>;
     createCheckoutSession(items: Array<ShoppingItem>, successUrl: string, cancelUrl: string): Promise<string>;
     createTournament(name: string, startDate: Time, endDate: Time, entryFee: bigint, isPaid: boolean): Promise<bigint>;
     enterTournament(tournamentId: bigint): Promise<void>;
     finalizeTournament(tournamentId: bigint): Promise<void>;
+    getBattle(code: string): Promise<Battle | null>;
     getCallerUserProfile(): Promise<UserProfile | null>;
-    getLeaderboard(): Promise<LeaderboardEntry[]>;
     getCallerUserRole(): Promise<UserRole>;
     getCategories(): Promise<Array<ExerciseCategory>>;
     getDietEntries(): Promise<Array<DietEntry>>;
     getDietEntriesByCategory(category: string): Promise<Array<DietEntry>>;
     getExercisesByCategory(category: string): Promise<Array<Exercise>>;
+    getLeaderboard(): Promise<Array<LeaderboardEntry>>;
     getProfile(user: Principal): Promise<UserProfile>;
     getStripeSessionStatus(sessionId: string): Promise<StripeSessionStatus>;
     getTournamentLeaderboard(tournamentId: bigint): Promise<Array<TournamentEntry>>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
     isCallerAdmin(): Promise<boolean>;
     isStripeConfigured(): Promise<boolean>;
+    joinBattle(code: string): Promise<void>;
     logPushups(count: bigint): Promise<void>;
     logWorkoutSession(exerciseId: bigint, reps: bigint): Promise<void>;
     recordAdView(): Promise<void>;
@@ -132,11 +156,5 @@ export interface backendInterface {
     setStripeConfiguration(config: StripeConfiguration): Promise<void>;
     submitTournamentScore(tournamentId: bigint, pushupCount: bigint): Promise<void>;
     transform(input: TransformationInput): Promise<TransformationOutput>;
-}
-export interface LeaderboardEntry {
-  user: Principal;
-  username: string;
-  xp: bigint;
-  level: bigint;
-  tier: Tier;
+    updateMyBattleScore(code: string, score: bigint): Promise<void>;
 }
