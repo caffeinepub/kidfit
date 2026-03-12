@@ -101,6 +101,14 @@ export interface http_request_result {
   'body' : Uint8Array,
   'headers' : Array<http_header>,
 }
+export interface BattleChatMessage {
+  'id' : bigint,
+  'battleCode' : string,
+  'sender' : Principal,
+  'senderUsername' : string,
+  'text' : string,
+  'timestamp' : Time,
+}
 export interface _SERVICE {
   '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
   'addDietEntry' : ActorMethod<[DietEntry], undefined>,
@@ -121,6 +129,7 @@ export interface _SERVICE {
   'enterTournament' : ActorMethod<[bigint], undefined>,
   'finalizeTournament' : ActorMethod<[bigint], undefined>,
   'getBattle' : ActorMethod<[string], [] | [Battle]>,
+  'getBattleChats' : ActorMethod<[string], Array<BattleChatMessage>>,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
   'getCategories' : ActorMethod<[], Array<ExerciseCategory>>,
@@ -140,6 +149,7 @@ export interface _SERVICE {
   'recordAdView' : ActorMethod<[], undefined>,
   'registerUser' : ActorMethod<[string], undefined>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
+  'sendBattleChat' : ActorMethod<[string, string], undefined>,
   'setStripeConfiguration' : ActorMethod<[StripeConfiguration], undefined>,
   'submitTournamentScore' : ActorMethod<[bigint, bigint], undefined>,
   'transform' : ActorMethod<[TransformationInput], TransformationOutput>,

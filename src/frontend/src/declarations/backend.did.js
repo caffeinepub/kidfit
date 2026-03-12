@@ -139,6 +139,7 @@ export const idlService = IDL.Service({
   'enterTournament' : IDL.Func([IDL.Nat], [], []),
   'finalizeTournament' : IDL.Func([IDL.Nat], [], []),
   'getBattle' : IDL.Func([IDL.Text], [IDL.Opt(Battle)], ['query']),
+  'getBattleChats' : IDL.Func([IDL.Text], [IDL.Vec(IDL.Record({'id': IDL.Nat, 'battleCode': IDL.Text, 'sender': IDL.Principal, 'senderUsername': IDL.Text, 'text': IDL.Text, 'timestamp': IDL.Int}))], ['query']),
   'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
   'getCategories' : IDL.Func([], [IDL.Vec(ExerciseCategory)], ['query']),
@@ -174,6 +175,7 @@ export const idlService = IDL.Service({
   'recordAdView' : IDL.Func([], [], []),
   'registerUser' : IDL.Func([IDL.Text], [], []),
   'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+    'sendBattleChat' : IDL.Func([IDL.Text, IDL.Text], [], []),
   'setStripeConfiguration' : IDL.Func([StripeConfiguration], [], []),
   'submitTournamentScore' : IDL.Func([IDL.Nat, IDL.Nat], [], []),
   'transform' : IDL.Func(
@@ -315,6 +317,7 @@ export const idlFactory = ({ IDL }) => {
     'enterTournament' : IDL.Func([IDL.Nat], [], []),
     'finalizeTournament' : IDL.Func([IDL.Nat], [], []),
     'getBattle' : IDL.Func([IDL.Text], [IDL.Opt(Battle)], ['query']),
+  'getBattleChats' : IDL.Func([IDL.Text], [IDL.Vec(IDL.Record({'id': IDL.Nat, 'battleCode': IDL.Text, 'sender': IDL.Principal, 'senderUsername': IDL.Text, 'text': IDL.Text, 'timestamp': IDL.Int}))], ['query']),
     'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
     'getCategories' : IDL.Func([], [IDL.Vec(ExerciseCategory)], ['query']),
@@ -350,6 +353,7 @@ export const idlFactory = ({ IDL }) => {
     'recordAdView' : IDL.Func([], [], []),
     'registerUser' : IDL.Func([IDL.Text], [], []),
     'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+    'sendBattleChat' : IDL.Func([IDL.Text, IDL.Text], [], []),
     'setStripeConfiguration' : IDL.Func([StripeConfiguration], [], []),
     'submitTournamentScore' : IDL.Func([IDL.Nat, IDL.Nat], [], []),
     'transform' : IDL.Func(

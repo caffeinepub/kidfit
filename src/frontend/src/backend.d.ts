@@ -92,6 +92,14 @@ export interface Battle {
     challengerScore: bigint;
     challenger?: Principal;
 }
+export interface BattleChatMessage {
+    id: bigint;
+    battleCode: string;
+    sender: Principal;
+    senderUsername: string;
+    text: string;
+    timestamp: Time;
+}
 export interface UserProfile {
     xp: bigint;
     adFreeUntil: Time;
@@ -134,6 +142,7 @@ export interface backendInterface {
     enterTournament(tournamentId: bigint): Promise<void>;
     finalizeTournament(tournamentId: bigint): Promise<void>;
     getBattle(code: string): Promise<Battle | null>;
+    getBattleChats(code: string): Promise<Array<BattleChatMessage>>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
     getCategories(): Promise<Array<ExerciseCategory>>;
@@ -153,6 +162,7 @@ export interface backendInterface {
     recordAdView(): Promise<void>;
     registerUser(username: string): Promise<void>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
+    sendBattleChat(code: string, text: string): Promise<void>;
     setStripeConfiguration(config: StripeConfiguration): Promise<void>;
     submitTournamentScore(tournamentId: bigint, pushupCount: bigint): Promise<void>;
     transform(input: TransformationInput): Promise<TransformationOutput>;

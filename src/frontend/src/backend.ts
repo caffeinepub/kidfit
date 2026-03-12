@@ -203,6 +203,14 @@ export enum Variant_active_finished_waiting {
     finished = "finished",
     waiting = "waiting"
 }
+export interface BattleChatMessage {
+    id: bigint;
+    battleCode: string;
+    sender: Principal;
+    senderUsername: string;
+    text: string;
+    timestamp: bigint;
+}
 export interface backendInterface {
     _initializeAccessControlWithSecret(userSecret: string): Promise<void>;
     addDietEntry(entry: DietEntry): Promise<void>;
@@ -217,6 +225,7 @@ export interface backendInterface {
     enterTournament(tournamentId: bigint): Promise<void>;
     finalizeTournament(tournamentId: bigint): Promise<void>;
     getBattle(code: string): Promise<Battle | null>;
+    getBattleChats(code: string): Promise<Array<BattleChatMessage>>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
     getCategories(): Promise<Array<ExerciseCategory>>;
@@ -236,6 +245,7 @@ export interface backendInterface {
     recordAdView(): Promise<void>;
     registerUser(username: string): Promise<void>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
+    sendBattleChat(code: string, text: string): Promise<void>;
     setStripeConfiguration(config: StripeConfiguration): Promise<void>;
     submitTournamentScore(tournamentId: bigint, pushupCount: bigint): Promise<void>;
     transform(input: TransformationInput): Promise<TransformationOutput>;
@@ -748,7 +758,36 @@ export class Backend implements backendInterface {
             return result;
         }
     }
+    async getBattleChats(arg0: string): Promise<Array<BattleChatMessage>> {
+        if (this.processError) {
+            try {
+                const result = await (this.actor as any).getBattleChats(arg0);
+                return result as Array<BattleChatMessage>;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await (this.actor as any).getBattleChats(arg0);
+            return result as Array<BattleChatMessage>;
+        }
+    }
+    async sendBattleChat(arg0: string, arg1: string): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await (this.actor as any).sendBattleChat(arg0, arg1);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await (this.actor as any).sendBattleChat(arg0, arg1);
+            return result;
+        }
+    }
 }
+
 function from_candid_Battle_n8(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _Battle): Battle {
     return from_candid_record_n9(_uploadFile, _downloadFile, value);
 }

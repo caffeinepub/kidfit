@@ -7,8 +7,10 @@ import {
   CheckCircle,
   Copy,
   Loader2,
+  MessageSquare,
   RefreshCw,
   RotateCcw,
+  Send,
   Share2,
   Swords,
   Trophy,
@@ -23,7 +25,9 @@ import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import {
   useCreateBattle,
   useGetBattle,
+  useGetBattleChats,
   useJoinBattle,
+  useSendBattleChat,
   useUpdateBattleScore,
   useUserProfile,
 } from "../hooks/useQueries";
@@ -31,6 +35,14 @@ import { getTierFromXp } from "../lib/xp";
 
 type BattleState = "menu" | "create" | "join" | "active" | "result";
 type PosePhase = "up" | "down" | "unknown";
+
+interface ChatMessage {
+  id: string;
+  text: string;
+  time: string;
+  senderUsername: string;
+  isOwn: boolean;
+}
 
 // ─── Canvas-based motion detection (same as PushUpCounterPage) ───────────────
 const SAMPLE_ROWS = 40;
@@ -188,6 +200,10 @@ function formatTimeRemaining(ms: number): string {
   return `${secs}s`;
 }
 
+function formatChatTime(date: Date): string {
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
 export default function BattlePage() {
   const { data: profile } = useUserProfile();
   const { identity } = useInternetIdentity();
@@ -205,10 +221,16 @@ export default function BattlePage() {
   const [finalCreatorScore, setFinalCreatorScore] = useState(0);
   const [finalChallengerScore, setFinalChallengerScore] = useState(0);
 
+  // Chat state
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const chatScrollRef = useRef<HTMLDivElement>(null);
+
   // Backend mutations
   const createBattle = useCreateBattle();
   const joinBattle = useJoinBattle();
   const updateScore = useUpdateBattleScore();
+  const sendBattleChat = useSendBattleChat();
 
   const updateScoreMutateRef = useRef(updateScore.mutate);
   useEffect(() => {
@@ -220,10 +242,33 @@ export default function BattlePage() {
     battleState === "active" || battleState === "create" ? battleCode : null,
   );
 
+  // Poll battle chats every 3s
+  const { data: remoteChatMessages } = useGetBattleChats(
+    battleState === "active" ? battleCode : null,
+  );
+
   const battleDataRef = useRef(battleData);
   useEffect(() => {
     battleDataRef.current = battleData;
   }, [battleData]);
+
+  // Sync remote chat messages into local state
+  useEffect(() => {
+    if (!remoteChatMessages || remoteChatMessages.length === 0) return;
+    const mapped: ChatMessage[] = remoteChatMessages.map((m) => ({
+      id: String(m.id),
+      text: m.text,
+      time: formatChatTime(new Date(Number(m.timestamp) / 1_000_000)),
+      senderUsername: m.senderUsername,
+      isOwn: m.senderUsername === username,
+    }));
+    setChatMessages(mapped);
+    setTimeout(() => {
+      if (chatScrollRef.current) {
+        chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+      }
+    }, 0);
+  }, [remoteChatMessages, username]);
 
   // Camera + canvas motion detection
   const {
@@ -350,6 +395,14 @@ export default function BattlePage() {
     };
   }, [isDetecting, isActive, detectLoop]);
 
+  // ===== CHAT HANDLER =====
+  const handleSendChat = () => {
+    const text = chatInput.trim();
+    if (!text || !battleCode) return;
+    setChatInput("");
+    sendBattleChat.mutate({ code: battleCode, text });
+  };
+
   // ===== HANDLERS =====
 
   const handleCreateBattle = async () => {
@@ -463,6 +516,7 @@ export default function BattlePage() {
       setFinalChallengerScore(countRef.current);
       setFinalCreatorScore(creatorScore);
     }
+    setChatMessages([]);
     setBattleState("result");
   };
 
@@ -471,6 +525,8 @@ export default function BattlePage() {
     setCount(0);
     setPhase("unknown");
     setJoinCode("");
+    setChatMessages([]);
+    setChatInput("");
     setBattleState("menu");
   };
 
@@ -848,6 +904,127 @@ export default function BattlePage() {
                   <CheckCircle className="w-5 h-5 mr-2" />
                   Submit Score ({count} reps)
                 </Button>
+              </div>
+
+              {/* ===== CHAT PANEL ===== */}
+              <div
+                className="rounded-2xl border overflow-hidden"
+                style={{
+                  background: "rgba(31,31,31,0.95)",
+                  borderColor: "oklch(0.55 0.18 42 / 0.35)",
+                }}
+              >
+                {/* Chat header */}
+                <div
+                  className="flex items-center gap-2 px-3 py-2 border-b"
+                  style={{ borderColor: "oklch(0.55 0.18 42 / 0.2)" }}
+                >
+                  <MessageSquare
+                    className="w-3.5 h-3.5"
+                    style={{ color: "oklch(0.75 0.18 42)" }}
+                  />
+                  <span
+                    className="text-xs font-display font-bold"
+                    style={{ color: "oklch(0.75 0.18 42)" }}
+                  >
+                    Battle Chat
+                  </span>
+                  <span className="text-xs text-muted-foreground font-body ml-1">
+                    live
+                  </span>
+                </div>
+
+                {/* Message list */}
+                <div
+                  ref={chatScrollRef}
+                  className="overflow-y-auto px-3 py-2 space-y-1.5"
+                  style={{ maxHeight: "160px" }}
+                >
+                  {chatMessages.length === 0 ? (
+                    <p className="text-xs text-muted-foreground font-body text-center py-3">
+                      No messages yet — say something! 👊
+                    </p>
+                  ) : (
+                    chatMessages.map((msg) => (
+                      <div
+                        key={msg.id}
+                        className={cn(
+                          "flex",
+                          msg.isOwn ? "justify-end" : "justify-start",
+                        )}
+                      >
+                        <div
+                          className="max-w-[80%] rounded-xl px-3 py-1.5"
+                          style={
+                            msg.isOwn
+                              ? {
+                                  background: "oklch(0.55 0.18 42 / 0.25)",
+                                  border: "1px solid oklch(0.55 0.18 42 / 0.3)",
+                                  borderBottomRightRadius: "4px",
+                                }
+                              : {
+                                  background: "oklch(0.3 0.1 200 / 0.3)",
+                                  border: "1px solid oklch(0.5 0.12 200 / 0.4)",
+                                  borderBottomLeftRadius: "4px",
+                                }
+                          }
+                        >
+                          {!msg.isOwn && (
+                            <p
+                              className="text-[10px] font-display font-bold mb-0.5"
+                              style={{ color: "oklch(0.7 0.12 200)" }}
+                            >
+                              {msg.senderUsername}
+                            </p>
+                          )}
+                          <p
+                            className="text-xs font-body leading-snug"
+                            style={{
+                              color: msg.isOwn
+                                ? "oklch(0.92 0.12 42)"
+                                : "oklch(0.88 0.08 200)",
+                            }}
+                          >
+                            {msg.text}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground font-body mt-0.5 text-right">
+                            {msg.time}
+                          </p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* Input row */}
+                <div
+                  className="flex gap-2 px-3 py-2 border-t"
+                  style={{ borderColor: "oklch(0.55 0.18 42 / 0.2)" }}
+                >
+                  <Input
+                    data-ocid="battle.chat.input"
+                    placeholder="Type a message..."
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleSendChat()}
+                    maxLength={120}
+                    className="h-8 text-xs font-body flex-1 bg-transparent border-muted/40 focus:border-amber-500/60 placeholder:text-muted-foreground/50"
+                  />
+                  <Button
+                    data-ocid="battle.chat.submit_button"
+                    onClick={handleSendChat}
+                    disabled={!chatInput.trim()}
+                    size="icon"
+                    className="h-8 w-8 shrink-0"
+                    style={{
+                      background: chatInput.trim()
+                        ? "oklch(0.55 0.18 42)"
+                        : "oklch(0.3 0.04 42)",
+                    }}
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
               </div>
             </motion.div>
           )}

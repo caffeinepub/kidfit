@@ -89,6 +89,15 @@ actor {
     expiresAt : Time.Time;
   };
 
+  public type BattleChatMessage = {
+    id : Nat;
+    battleCode : Text;
+    sender : Principal;
+    senderUsername : Text;
+    text : Text;
+    timestamp : Time.Time;
+  };
+
   // Persistent State
   let profiles = Map.empty<Principal, UserProfile>();
   let exerciseCategories = Map.empty<Text, ExerciseCategory>();
@@ -99,9 +108,11 @@ actor {
   let adViews = Map.empty<Principal, List.List<Time.Time>>();
   let dietEntries = Map.empty<Nat, DietEntry>();
   let battles = Map.empty<Text, Battle>();
+  let battleChats = Map.empty<Text, List.List<BattleChatMessage>>();
   var nextExerciseId = 0;
   var nextTournamentId = 0;
   var nextDietEntryId = 0;
+  var nextChatId = 0;
 
   // Authorization and Stripe Config
   let accessControlState = Authorization.initState();
@@ -559,5 +570,52 @@ actor {
 
   public query ({ caller }) func getBattle(code : Text) : async ?Battle {
     battles.get(code);
+  };
+
+  // *** Battle Chat ***
+  public shared ({ caller }) func sendBattleChat(code : Text, text : Text) : async () {
+    if (not (Authorization.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can send chat messages");
+    };
+    let battle = switch (battles.get(code)) {
+      case (null) { Runtime.trap("Battle not found") };
+      case (?b) { b };
+    };
+    // Verify caller is a participant
+    let isParticipant = (caller == battle.creator) or (switch (battle.challenger) {
+      case (null) { false };
+      case (?c) { caller == c };
+    });
+    if (not isParticipant) { Runtime.trap("Only battle participants can chat") };
+
+    let senderUsername = switch (profiles.get(caller)) {
+      case (null) { "Unknown" };
+      case (?p) { p.username };
+    };
+
+    let msg : BattleChatMessage = {
+      id = nextChatId;
+      battleCode = code;
+      sender = caller;
+      senderUsername;
+      text;
+      timestamp = Time.now();
+    };
+    nextChatId += 1;
+
+    let msgs = switch (battleChats.get(code)) {
+      case (null) { List.empty<BattleChatMessage>() };
+      case (?m) { m };
+    };
+    // Keep max 100 messages
+    msgs.add(msg);
+    battleChats.add(code, msgs);
+  };
+
+  public query ({ caller }) func getBattleChats(code : Text) : async [BattleChatMessage] {
+    switch (battleChats.get(code)) {
+      case (null) { [] };
+      case (?msgs) { msgs.toArray() };
+    };
   };
 };

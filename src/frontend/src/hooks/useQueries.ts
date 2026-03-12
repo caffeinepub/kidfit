@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   Battle,
+  BattleChatMessage,
   Exercise,
   ExerciseCategory,
   LeaderboardEntry,
@@ -34,8 +35,6 @@ export function useUserProfile() {
     },
     enabled: isEnabled,
   });
-  // When the query is disabled (actor not ready), don't report isLoading=true
-  // — that was causing the infinite loading spinner in App.tsx
   return { ...query, isLoading: isEnabled ? query.isLoading : false };
 }
 
@@ -50,7 +49,7 @@ export function useRegisterUser() {
       } catch (err: unknown) {
         const fullText = getErrText(err);
         if (fullText.toLowerCase().includes("already registered")) {
-          return; // silently succeed — profile exists
+          return;
         }
         throw err;
       }
@@ -417,5 +416,37 @@ export function useGetBattle(code: string | null) {
     },
     enabled: !!actor && !!code && !isFetching,
     refetchInterval: 3000,
+  });
+}
+
+export function useGetBattleChats(code: string | null) {
+  const { actor, isFetching } = useActor();
+  return useQuery<BattleChatMessage[]>({
+    queryKey: ["battleChats", code],
+    queryFn: async () => {
+      if (!actor || !code) return [];
+      const result = await actor.getBattleChats(code);
+      return result as BattleChatMessage[];
+    },
+    enabled: !!actor && !!code && !isFetching,
+    refetchInterval: 2000,
+  });
+}
+
+export function useSendBattleChat() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ code, text }: { code: string; text: string }) => {
+      if (!actor) throw new Error("No actor");
+      await actor.sendBattleChat(code, text);
+      return { code };
+    },
+    onSuccess: (_data, variables) => {
+      // Immediately refresh the chat so the sender sees their own message
+      queryClient.invalidateQueries({
+        queryKey: ["battleChats", variables.code],
+      });
+    },
   });
 }
