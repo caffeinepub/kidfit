@@ -44,7 +44,6 @@ interface ChatMessage {
   isOwn: boolean;
 }
 
-// ─── Canvas-based motion detection (same as PushUpCounterPage) ───────────────
 const SAMPLE_ROWS = 40;
 const MOTION_THRESH = 6;
 const STABLE_FRAMES = 3;
@@ -221,12 +220,10 @@ export default function BattlePage() {
   const [finalCreatorScore, setFinalCreatorScore] = useState(0);
   const [finalChallengerScore, setFinalChallengerScore] = useState(0);
 
-  // Chat state
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const chatScrollRef = useRef<HTMLDivElement>(null);
 
-  // Backend mutations
   const createBattle = useCreateBattle();
   const joinBattle = useJoinBattle();
   const updateScore = useUpdateBattleScore();
@@ -237,14 +234,12 @@ export default function BattlePage() {
     updateScoreMutateRef.current = updateScore.mutate;
   }, [updateScore.mutate]);
 
-  // Poll battle data every 3s
   const { data: battleData } = useGetBattle(
     battleState === "active" || battleState === "create" ? battleCode : null,
   );
 
-  // Poll battle chats every 3s
   const { data: remoteChatMessages } = useGetBattleChats(
-    battleState === "active" ? battleCode : null,
+    battleState === "active" || battleState === "result" ? battleCode : null,
   );
 
   const battleDataRef = useRef(battleData);
@@ -252,9 +247,8 @@ export default function BattlePage() {
     battleDataRef.current = battleData;
   }, [battleData]);
 
-  // Sync remote chat messages into local state
   useEffect(() => {
-    if (!remoteChatMessages || remoteChatMessages.length === 0) return;
+    if (!remoteChatMessages) return;
     const mapped: ChatMessage[] = remoteChatMessages.map((m) => ({
       id: String(m.id),
       text: m.text,
@@ -262,7 +256,16 @@ export default function BattlePage() {
       senderUsername: m.senderUsername,
       isOwn: m.senderUsername === username,
     }));
-    setChatMessages(mapped);
+    setChatMessages((prev) => {
+      const confirmedIds = new Set(mapped.map((m) => m.id));
+      const optimisticOnly = prev.filter(
+        (m) => m.id.startsWith("opt-") && !confirmedIds.has(m.id),
+      );
+      const merged = [...mapped, ...optimisticOnly].sort((a, b) =>
+        a.time.localeCompare(b.time),
+      );
+      return merged;
+    });
     setTimeout(() => {
       if (chatScrollRef.current) {
         chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
@@ -270,7 +273,6 @@ export default function BattlePage() {
     }, 0);
   }, [remoteChatMessages, username]);
 
-  // Camera + canvas motion detection
   const {
     videoRef,
     canvasRef,
@@ -312,7 +314,6 @@ export default function BattlePage() {
     isCreatorRef.current = isCreator;
   }, [isCreator]);
 
-  // Create offscreen canvas once
   useEffect(() => {
     const c = document.createElement("canvas");
     c.width = 160;
@@ -321,7 +322,6 @@ export default function BattlePage() {
     offscreenCtxRef.current = c.getContext("2d", { willReadFrequently: true });
   }, []);
 
-  // Timer from backend expiresAt
   const expiresAt = battleData?.expiresAt;
   useEffect(() => {
     if (battleState !== "active" || !expiresAt) return;
@@ -335,7 +335,6 @@ export default function BattlePage() {
     return () => clearInterval(interval);
   }, [battleState, expiresAt]);
 
-  // Score sync every 3s
   useEffect(() => {
     if (battleState !== "active" || !battleCode) return;
     scoreIntervalRef.current = setInterval(() => {
@@ -349,7 +348,6 @@ export default function BattlePage() {
     };
   }, [battleState, battleCode]);
 
-  // Canvas detection loop
   const detectLoop = useCallback(() => {
     const video = videoRef.current;
     const ctx = offscreenCtxRef.current;
@@ -395,15 +393,31 @@ export default function BattlePage() {
     };
   }, [isDetecting, isActive, detectLoop]);
 
-  // ===== CHAT HANDLER =====
-  const handleSendChat = () => {
+  const handleSendChat = async () => {
     const text = chatInput.trim();
     if (!text || !battleCode) return;
     setChatInput("");
-    sendBattleChat.mutate({ code: battleCode, text });
+    const optimisticMsg: ChatMessage = {
+      id: `opt-${Date.now()}`,
+      text,
+      time: formatChatTime(new Date()),
+      senderUsername: username,
+      isOwn: true,
+    };
+    setChatMessages((prev) => [...prev, optimisticMsg]);
+    setTimeout(() => {
+      if (chatScrollRef.current) {
+        chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+      }
+    }, 0);
+    try {
+      await sendBattleChat.mutateAsync({ code: battleCode, text });
+      setChatMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id));
+    } catch {
+      toast.error("Message failed to send. Try again.");
+      setChatMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id));
+    }
   };
-
-  // ===== HANDLERS =====
 
   const handleCreateBattle = async () => {
     const code = generateBattleCode();
@@ -436,7 +450,7 @@ export default function BattlePage() {
 
   const handleShareCode = async () => {
     if (!battleCode) return;
-    const shareText = `Join my Push-Up Battle on TeenTuffLifts! Use code: ${battleCode} 💪 #TeenTuffLifts`;
+    const shareText = `Join my Push-Up Battle on TeenTuffLifts! Use code: ${battleCode} \uD83D\uDCAA #TeenTuffLifts`;
     if (navigator.share) {
       try {
         await navigator.share({
@@ -516,7 +530,6 @@ export default function BattlePage() {
       setFinalChallengerScore(countRef.current);
       setFinalCreatorScore(creatorScore);
     }
-    setChatMessages([]);
     setBattleState("result");
   };
 
@@ -551,8 +564,8 @@ export default function BattlePage() {
     unknown: "text-muted-foreground",
   };
   const phaseLabels: Record<PosePhase, string> = {
-    up: "UP ↑",
-    down: "DOWN ↓",
+    up: "UP \u2191",
+    down: "DOWN \u2193",
     unknown: "READY",
   };
 
@@ -564,7 +577,7 @@ export default function BattlePage() {
           Push-Up Battle
         </h1>
         <p className="text-muted-foreground text-sm font-body">
-          Real-time push-up challenge — works across devices!
+          Real-time push-up challenge \u2014 works across devices!
         </p>
       </header>
 
@@ -587,13 +600,13 @@ export default function BattlePage() {
                 }}
               >
                 <div className="p-6">
-                  <div className="text-6xl mb-3">⚔️</div>
+                  <div className="text-6xl mb-3">\u2694\uFE0F</div>
                   <h2 className="font-display font-black text-2xl mb-2">
                     Challenge a Friend!
                   </h2>
                   <p className="text-sm text-muted-foreground font-body">
                     Create a battle, share your code. Both of you use your own
-                    camera — scores sync live across devices. Best reps in{" "}
+                    camera \u2014 scores sync live across devices. Best reps in{" "}
                     <span className="text-neon-green font-bold">
                       20 minutes
                     </span>{" "}
@@ -667,8 +680,8 @@ export default function BattlePage() {
                   >
                     {battleData.status ===
                     Variant_active_finished_waiting.waiting
-                      ? "⏳ Waiting for opponent..."
-                      : "✅ Opponent joined!"}
+                      ? "\u23F3 Waiting for opponent..."
+                      : "\u2705 Opponent joined!"}
                   </div>
                 )}
               </div>
@@ -712,7 +725,7 @@ export default function BattlePage() {
                 onClick={() => setBattleState("menu")}
                 className="w-full text-muted-foreground font-body text-sm"
               >
-                ← Back to Menu
+                \u2190 Back to Menu
               </Button>
             </motion.div>
           )}
@@ -731,8 +744,7 @@ export default function BattlePage() {
                   Enter Battle Code
                 </h2>
                 <p className="text-sm text-muted-foreground font-body">
-                  Ask your friend for their 6-character battle code. Works on
-                  any device!
+                  Ask your friend for their 6-character battle code.
                 </p>
                 <Input
                   data-ocid="battle.code.input"
@@ -760,7 +772,7 @@ export default function BattlePage() {
                 onClick={() => setBattleState("menu")}
                 className="w-full text-muted-foreground font-body text-sm"
               >
-                ← Back to Menu
+                \u2190 Back to Menu
               </Button>
             </motion.div>
           )}
@@ -791,56 +803,62 @@ export default function BattlePage() {
                 </span>
               </div>
 
-              {/* Camera View */}
-              <div
-                data-ocid="battle.camera.canvas_target"
-                className="relative w-full rounded-2xl overflow-hidden bg-muted aspect-[4/3] border border-border"
-              >
-                <video
-                  ref={videoRef}
-                  className={cn(
-                    "absolute inset-0 w-full h-full object-cover scale-x-[-1]",
-                    isActive ? "opacity-100" : "opacity-0",
-                  )}
-                  playsInline
-                  muted
-                />
-                <canvas ref={canvasRef} className="hidden" />
-
-                {!isActive && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-muted/80">
-                    {error ? (
-                      <div className="text-center">
-                        <AlertCircle className="w-10 h-10 text-muted-foreground mx-auto mb-2" />
-                        <p className="text-xs text-muted-foreground font-body px-4">
-                          Camera unavailable
-                        </p>
-                      </div>
-                    ) : (
-                      <RefreshCw className="w-8 h-8 text-neon-green animate-spin" />
-                    )}
-                  </div>
-                )}
-
-                {isActive && (
-                  <div
+              {/* Camera View - Your Feed */}
+              <div className="space-y-1">
+                <p className="text-xs font-body text-muted-foreground flex items-center gap-1.5 px-1">
+                  <Camera className="w-3.5 h-3.5 text-neon-green" />
+                  Your Camera
+                </p>
+                <div
+                  data-ocid="battle.camera.canvas_target"
+                  className="relative w-full rounded-2xl overflow-hidden bg-muted aspect-[4/3] border border-border"
+                >
+                  <video
+                    ref={videoRef}
                     className={cn(
-                      "absolute top-3 left-3 px-3 py-1 rounded-full border font-display font-bold text-xs z-10",
-                      phaseColors[phase],
-                      phase === "up"
-                        ? "bg-primary/20 border-primary/30"
-                        : "bg-muted/20 border-muted/30",
+                      "absolute inset-0 w-full h-full object-cover scale-x-[-1]",
+                      isActive ? "opacity-100" : "opacity-0",
                     )}
-                  >
-                    {phaseLabels[phase]}
-                  </div>
-                )}
+                    playsInline
+                    muted
+                  />
+                  <canvas ref={canvasRef} className="hidden" />
 
-                {isActive && calibrating && (
-                  <div className="absolute bottom-3 left-3 right-3 z-20 bg-card/80 rounded-xl px-3 py-2 text-xs text-muted-foreground font-body text-center">
-                    Calibrating... get into push-up position
-                  </div>
-                )}
+                  {!isActive && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-muted/80">
+                      {error ? (
+                        <div className="text-center">
+                          <AlertCircle className="w-10 h-10 text-muted-foreground mx-auto mb-2" />
+                          <p className="text-xs text-muted-foreground font-body px-4">
+                            Camera unavailable
+                          </p>
+                        </div>
+                      ) : (
+                        <RefreshCw className="w-8 h-8 text-neon-green animate-spin" />
+                      )}
+                    </div>
+                  )}
+
+                  {isActive && (
+                    <div
+                      className={cn(
+                        "absolute top-3 left-3 px-3 py-1 rounded-full border font-display font-bold text-xs z-10",
+                        phaseColors[phase],
+                        phase === "up"
+                          ? "bg-primary/20 border-primary/30"
+                          : "bg-muted/20 border-muted/30",
+                      )}
+                    >
+                      {phaseLabels[phase]}
+                    </div>
+                  )}
+
+                  {isActive && calibrating && (
+                    <div className="absolute bottom-3 left-3 right-3 z-20 bg-card/80 rounded-xl px-3 py-2 text-xs text-muted-foreground font-body text-center">
+                      Calibrating... get into push-up position
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Count + Opponent */}
@@ -875,7 +893,7 @@ export default function BattlePage() {
                   <div className="font-display font-black text-4xl text-neon-cyan">
                     {liveOpponentScore !== null && liveOpponentScore > 0
                       ? liveOpponentScore
-                      : "—"}
+                      : "\u2014"}
                   </div>
                   <div className="text-xs text-muted-foreground font-body mt-1">
                     live
@@ -914,7 +932,6 @@ export default function BattlePage() {
                   borderColor: "oklch(0.55 0.18 42 / 0.35)",
                 }}
               >
-                {/* Chat header */}
                 <div
                   className="flex items-center gap-2 px-3 py-2 border-b"
                   style={{ borderColor: "oklch(0.55 0.18 42 / 0.2)" }}
@@ -934,7 +951,6 @@ export default function BattlePage() {
                   </span>
                 </div>
 
-                {/* Message list */}
                 <div
                   ref={chatScrollRef}
                   className="overflow-y-auto px-3 py-2 space-y-1.5"
@@ -942,7 +958,7 @@ export default function BattlePage() {
                 >
                   {chatMessages.length === 0 ? (
                     <p className="text-xs text-muted-foreground font-body text-center py-3">
-                      No messages yet — say something! 👊
+                      No messages yet \u2014 say something! \uD83D\uDC4A
                     </p>
                   ) : (
                     chatMessages.map((msg) => (
@@ -996,7 +1012,6 @@ export default function BattlePage() {
                   )}
                 </div>
 
-                {/* Input row */}
                 <div
                   className="flex gap-2 px-3 py-2 border-t"
                   style={{ borderColor: "oklch(0.55 0.18 42 / 0.2)" }}
@@ -1006,13 +1021,15 @@ export default function BattlePage() {
                     placeholder="Type a message..."
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleSendChat()}
+                    onKeyDown={(e) =>
+                      e.key === "Enter" && void handleSendChat()
+                    }
                     maxLength={120}
                     className="h-8 text-xs font-body flex-1 bg-transparent border-muted/40 focus:border-amber-500/60 placeholder:text-muted-foreground/50"
                   />
                   <Button
                     data-ocid="battle.chat.submit_button"
-                    onClick={handleSendChat}
+                    onClick={() => void handleSendChat()}
                     disabled={!chatInput.trim()}
                     size="icon"
                     className="h-8 w-8 shrink-0"
@@ -1052,7 +1069,14 @@ export default function BattlePage() {
               >
                 {iWon && (
                   <div className="absolute inset-0 pointer-events-none overflow-hidden">
-                    {["🎉", "⭐", "💪", "🏆", "✨", "🎊"].map((emoji, i) => (
+                    {[
+                      "\uD83C\uDF89",
+                      "\u2B50",
+                      "\uD83D\uDCAA",
+                      "\uD83C\uDFC6",
+                      "\u2728",
+                      "\uD83C\uDF8A",
+                    ].map((emoji, i) => (
                       <span
                         key={emoji}
                         className="absolute text-2xl animate-bounce"
@@ -1068,8 +1092,9 @@ export default function BattlePage() {
                     ))}
                   </div>
                 )}
-
-                <div className="text-5xl mb-2">{iWon ? "🏆" : "💪"}</div>
+                <div className="text-5xl mb-2">
+                  {iWon ? "\uD83C\uDFC6" : "\uD83D\uDCAA"}
+                </div>
                 <h2 className="font-display font-black text-2xl mb-1">
                   {iWon ? "You Won!" : "Good Effort!"}
                 </h2>
@@ -1090,7 +1115,7 @@ export default function BattlePage() {
                   )}
                 >
                   <div className="text-xs text-muted-foreground font-body mb-1">
-                    {username} {iWon ? "👑" : ""}
+                    {username} {iWon ? "\uD83D\uDC51" : ""}
                   </div>
                   <div className="font-display font-black text-4xl text-neon-green">
                     {myScore}
@@ -1106,7 +1131,7 @@ export default function BattlePage() {
                   )}
                 >
                   <div className="text-xs text-muted-foreground font-body mb-1">
-                    Opponent {!iWon ? "👑" : ""}
+                    Opponent {!iWon ? "\uD83D\uDC51" : ""}
                   </div>
                   <div className="font-display font-black text-4xl text-neon-cyan">
                     {opponentFinalScore}
@@ -1132,7 +1157,7 @@ export default function BattlePage() {
                 onClick={handlePlayAgain}
                 className="w-full h-12 bg-primary text-primary-foreground font-display font-bold glow-green"
               >
-                Play Again ⚔️
+                Play Again \u2694\uFE0F
               </Button>
             </motion.div>
           )}

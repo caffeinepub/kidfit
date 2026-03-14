@@ -11,22 +11,35 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { Apple, Dumbbell, Shield, Trash2, Trophy, Users } from "lucide-react";
+import {
+  Apple,
+  Dumbbell,
+  Loader2,
+  Plus,
+  Shield,
+  Trash2,
+  Trophy,
+  Users,
+} from "lucide-react";
 import { motion } from "motion/react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Difficulty, UserRole } from "../backend.d";
+import type { WorkoutExercise } from "../backend.d";
 import {
   DEMO_FREE_TOURNAMENTS,
   DEMO_PAID_TOURNAMENTS,
   useAddExercise,
   useAddExerciseCategory,
+  useAddWorkoutPlan,
   useCreateTournament,
+  useDeleteWorkoutPlan,
   useFinalizeTournament,
+  useGetWorkoutPlans,
   useUserRole,
 } from "../hooks/useQueries";
 
-interface DietEntry {
+interface LocalDietEntry {
   id: string;
   name: string;
   category: string;
@@ -35,6 +48,7 @@ interface DietEntry {
   protein: number;
   carbs: number;
   fats: number;
+  isVeg: boolean;
 }
 
 const DIET_CATEGORIES = [
@@ -46,18 +60,25 @@ const DIET_CATEGORIES = [
   "Post-workout",
 ];
 
-function loadDietEntries(): DietEntry[] {
+function loadDietEntries(): LocalDietEntry[] {
   try {
     const stored = localStorage.getItem("kidfit_diet_entries");
-    if (stored) return JSON.parse(stored) as DietEntry[];
+    if (stored) return JSON.parse(stored) as LocalDietEntry[];
   } catch {
     /* ignore */
   }
   return [];
 }
 
-function saveDietEntries(entries: DietEntry[]) {
+function saveDietEntries(entries: LocalDietEntry[]) {
   localStorage.setItem("kidfit_diet_entries", JSON.stringify(entries));
+}
+
+interface WorkoutExerciseForm {
+  name: string;
+  sets: string;
+  reps: string;
+  notes: string;
 }
 
 export default function AdminPage() {
@@ -68,6 +89,10 @@ export default function AdminPage() {
   const addExerciseMutation = useAddExercise();
   const createTournamentMutation = useCreateTournament();
   const finalizeTournamentMutation = useFinalizeTournament();
+  const addWorkoutPlanMutation = useAddWorkoutPlan();
+  const deleteWorkoutPlanMutation = useDeleteWorkoutPlan();
+  const { data: workoutPlans = [], isLoading: plansLoading } =
+    useGetWorkoutPlans();
 
   // Exercise category form
   const [catForm, setCatForm] = useState({ name: "", description: "" });
@@ -91,7 +116,7 @@ export default function AdminPage() {
   });
 
   // Diet
-  const [dietEntries, setDietEntries] = useState<DietEntry[]>(() =>
+  const [dietEntries, setDietEntries] = useState<LocalDietEntry[]>(() =>
     loadDietEntries(),
   );
   const [dietForm, setDietForm] = useState({
@@ -102,7 +127,17 @@ export default function AdminPage() {
     protein: "",
     carbs: "",
     fats: "",
+    isVeg: true,
   });
+
+  // Workout Plan form
+  const [planForm, setPlanForm] = useState({
+    dayLabel: "",
+    description: "",
+  });
+  const [planExercises, setPlanExercises] = useState<WorkoutExerciseForm[]>([
+    { name: "", sets: "", reps: "", notes: "" },
+  ]);
 
   useEffect(() => {
     setDietEntries(loadDietEntries());
@@ -221,7 +256,7 @@ export default function AdminPage() {
       toast.error("Name, category, and calories are required");
       return;
     }
-    const newEntry: DietEntry = {
+    const newEntry: LocalDietEntry = {
       id: `diet_${Date.now()}`,
       name: dietForm.name.trim(),
       category: dietForm.category,
@@ -230,6 +265,7 @@ export default function AdminPage() {
       protein: Number.parseFloat(dietForm.protein) || 0,
       carbs: Number.parseFloat(dietForm.carbs) || 0,
       fats: Number.parseFloat(dietForm.fats) || 0,
+      isVeg: dietForm.isVeg,
     };
     const updated = [...dietEntries, newEntry];
     setDietEntries(updated);
@@ -242,6 +278,7 @@ export default function AdminPage() {
       protein: "",
       carbs: "",
       fats: "",
+      isVeg: true,
     });
     toast.success("Diet entry added!");
   };
@@ -251,6 +288,67 @@ export default function AdminPage() {
     setDietEntries(updated);
     saveDietEntries(updated);
     toast.success("Entry deleted.");
+  };
+
+  const addPlanExercise = () => {
+    setPlanExercises((prev) => [
+      ...prev,
+      { name: "", sets: "", reps: "", notes: "" },
+    ]);
+  };
+
+  const removePlanExercise = (idx: number) => {
+    setPlanExercises((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const updatePlanExercise = (
+    idx: number,
+    field: keyof WorkoutExerciseForm,
+    value: string,
+  ) => {
+    setPlanExercises((prev) =>
+      prev.map((ex, i) => (i === idx ? { ...ex, [field]: value } : ex)),
+    );
+  };
+
+  const handleAddWorkoutPlan = async () => {
+    if (!planForm.dayLabel.trim()) {
+      toast.error("Day label is required");
+      return;
+    }
+    const validExercises = planExercises.filter((ex) => ex.name.trim());
+    if (validExercises.length === 0) {
+      toast.error("Add at least one exercise");
+      return;
+    }
+    const exercises: WorkoutExercise[] = validExercises.map((ex) => ({
+      name: ex.name.trim(),
+      sets: BigInt(Number.parseInt(ex.sets, 10) || 1),
+      reps: BigInt(Number.parseInt(ex.reps, 10) || 10),
+      notes: ex.notes.trim(),
+    }));
+    try {
+      await addWorkoutPlanMutation.mutateAsync({
+        id: BigInt(0), // backend assigns real id
+        dayLabel: planForm.dayLabel.trim(),
+        description: planForm.description.trim(),
+        exercises,
+      });
+      setPlanForm({ dayLabel: "", description: "" });
+      setPlanExercises([{ name: "", sets: "", reps: "", notes: "" }]);
+      toast.success("Workout plan added!");
+    } catch {
+      toast.error("Failed to add workout plan. Please try again.");
+    }
+  };
+
+  const handleDeleteWorkoutPlan = async (id: bigint) => {
+    try {
+      await deleteWorkoutPlanMutation.mutateAsync(id);
+      toast.success("Workout plan deleted.");
+    } catch {
+      toast.error("Failed to delete workout plan.");
+    }
   };
 
   return (
@@ -267,25 +365,33 @@ export default function AdminPage() {
 
       <main className="flex-1 px-4">
         <Tabs defaultValue="exercises">
-          <TabsList className="w-full grid grid-cols-4 mb-4 bg-muted/30 border border-border">
+          <TabsList className="w-full grid grid-cols-5 mb-4 bg-muted/30 border border-border">
             <TabsTrigger value="exercises" className="font-body text-xs gap-1">
               <Dumbbell className="w-3 h-3" />
-              Exercises
+              <span className="hidden sm:inline">Exercises</span>
+            </TabsTrigger>
+            <TabsTrigger
+              data-ocid="admin.workout_tab"
+              value="workouts"
+              className="font-body text-xs gap-1"
+            >
+              <Trophy className="w-3 h-3" />
+              <span className="hidden sm:inline">Workouts</span>
             </TabsTrigger>
             <TabsTrigger
               value="tournaments"
               className="font-body text-xs gap-1"
             >
               <Trophy className="w-3 h-3" />
-              Events
+              <span className="hidden sm:inline">Events</span>
             </TabsTrigger>
             <TabsTrigger value="diet" className="font-body text-xs gap-1">
               <Apple className="w-3 h-3" />
-              Diet
+              <span className="hidden sm:inline">Diet</span>
             </TabsTrigger>
             <TabsTrigger value="users" className="font-body text-xs gap-1">
               <Users className="w-3 h-3" />
-              Users
+              <span className="hidden sm:inline">Users</span>
             </TabsTrigger>
           </TabsList>
 
@@ -441,6 +547,201 @@ export default function AdminPage() {
             </motion.div>
           </TabsContent>
 
+          {/* ===== WORKOUT PLANS TAB ===== */}
+          <TabsContent value="workouts" className="space-y-4">
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="card-sporty p-4 space-y-3"
+            >
+              <h2 className="font-display font-bold text-base">
+                Add Workout Plan
+              </h2>
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground font-body uppercase tracking-wider">
+                    Day Label *
+                  </Label>
+                  <Input
+                    data-ocid="admin.workout_plan_input"
+                    placeholder="e.g. Day 1 - Upper Body"
+                    value={planForm.dayLabel}
+                    onChange={(e) =>
+                      setPlanForm((f) => ({ ...f, dayLabel: e.target.value }))
+                    }
+                    className="bg-muted/30 border-border font-body"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground font-body uppercase tracking-wider">
+                    Description
+                  </Label>
+                  <Textarea
+                    placeholder="Workout description..."
+                    value={planForm.description}
+                    onChange={(e) =>
+                      setPlanForm((f) => ({
+                        ...f,
+                        description: e.target.value,
+                      }))
+                    }
+                    className="bg-muted/30 border-border font-body resize-none"
+                    rows={2}
+                  />
+                </div>
+
+                {/* Exercise List Builder */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs text-muted-foreground font-body uppercase tracking-wider">
+                      Exercises
+                    </Label>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={addPlanExercise}
+                      className="h-7 text-xs border-border gap-1"
+                    >
+                      <Plus className="w-3 h-3" /> Add Exercise
+                    </Button>
+                  </div>
+
+                  {planExercises.map((ex, idx) => (
+                    <div
+                      key={String(idx)}
+                      className="rounded-xl border border-border/60 bg-muted/20 p-3 space-y-2"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-display font-bold text-muted-foreground">
+                          Exercise {idx + 1}
+                        </span>
+                        {planExercises.length > 1 && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => removePlanExercise(idx)}
+                            className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                      <Input
+                        placeholder="Exercise name *"
+                        value={ex.name}
+                        onChange={(e) =>
+                          updatePlanExercise(idx, "name", e.target.value)
+                        }
+                        className="bg-muted/30 border-border font-body h-8 text-sm"
+                      />
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input
+                          type="number"
+                          placeholder="Sets (e.g. 3)"
+                          value={ex.sets}
+                          onChange={(e) =>
+                            updatePlanExercise(idx, "sets", e.target.value)
+                          }
+                          className="bg-muted/30 border-border font-body h-8 text-sm"
+                        />
+                        <Input
+                          type="number"
+                          placeholder="Reps (e.g. 10)"
+                          value={ex.reps}
+                          onChange={(e) =>
+                            updatePlanExercise(idx, "reps", e.target.value)
+                          }
+                          className="bg-muted/30 border-border font-body h-8 text-sm"
+                        />
+                      </div>
+                      <Input
+                        placeholder="Notes (optional)"
+                        value={ex.notes}
+                        onChange={(e) =>
+                          updatePlanExercise(idx, "notes", e.target.value)
+                        }
+                        className="bg-muted/30 border-border font-body h-8 text-sm"
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                <Button
+                  data-ocid="admin.workout_plan_submit_button"
+                  onClick={handleAddWorkoutPlan}
+                  disabled={addWorkoutPlanMutation.isPending}
+                  className="w-full bg-primary text-primary-foreground font-display font-bold"
+                >
+                  {addWorkoutPlanMutation.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin mr-2" />{" "}
+                      Saving...
+                    </>
+                  ) : (
+                    "Add Workout Plan"
+                  )}
+                </Button>
+              </div>
+            </motion.div>
+
+            {/* Existing Workout Plans */}
+            {plansLoading ? (
+              <div className="flex justify-center py-8">
+                <div className="w-6 h-6 border-2 border-neon-green border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : workoutPlans.length > 0 ? (
+              <div className="space-y-3">
+                <h3 className="font-display font-bold text-sm text-muted-foreground uppercase tracking-wider">
+                  Current Plans ({workoutPlans.length})
+                </h3>
+                {workoutPlans.map((plan, idx) => (
+                  <motion.div
+                    key={plan.id.toString()}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: idx * 0.04 }}
+                    className="card-sporty p-4"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-display font-bold text-sm">
+                          {plan.dayLabel}
+                        </div>
+                        {plan.description && (
+                          <p className="text-xs text-muted-foreground font-body mt-0.5">
+                            {plan.description}
+                          </p>
+                        )}
+                        {plan.exercises.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {plan.exercises.map((ex, ei) => (
+                              <span
+                                key={String(ei)}
+                                className="text-[10px] bg-muted/40 rounded-full px-2 py-0.5 font-body text-muted-foreground"
+                              >
+                                {ex.name} {String(ex.sets)}×{String(ex.reps)}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <Button
+                        data-ocid={`admin.workout_plan_delete_button.${idx + 1}`}
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDeleteWorkoutPlan(plan.id)}
+                        disabled={deleteWorkoutPlanMutation.isPending}
+                        className="shrink-0 w-8 h-8 text-muted-foreground hover:text-destructive"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            ) : null}
+          </TabsContent>
+
           {/* ===== TOURNAMENTS TAB ===== */}
           <TabsContent value="tournaments" className="space-y-4">
             <motion.div
@@ -469,7 +770,7 @@ export default function AdminPage() {
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
                     <Label className="text-xs text-muted-foreground font-body uppercase tracking-wider">
-                      Start Date *
+                      Start Date
                     </Label>
                     <Input
                       type="date"
@@ -482,7 +783,7 @@ export default function AdminPage() {
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs text-muted-foreground font-body uppercase tracking-wider">
-                      End Date *
+                      End Date
                     </Label>
                     <Input
                       type="date"
@@ -494,19 +795,21 @@ export default function AdminPage() {
                     />
                   </div>
                 </div>
-                <div className="flex items-center gap-3 py-1">
+                <div className="flex items-center justify-between rounded-lg border border-border bg-muted/20 px-4 py-3">
+                  <Label className="text-sm font-body">
+                    Paid Tournament (₹50)
+                  </Label>
                   <Switch
                     checked={tForm.isPaid}
                     onCheckedChange={(v) =>
                       setTForm((f) => ({ ...f, isPaid: v }))
                     }
                   />
-                  <Label className="text-sm font-body">Paid Tournament</Label>
                 </div>
                 {tForm.isPaid && (
                   <div className="space-y-1">
                     <Label className="text-xs text-muted-foreground font-body uppercase tracking-wider">
-                      Entry Fee (in paise)
+                      Entry Fee (paise)
                     </Label>
                     <Input
                       type="number"
@@ -532,7 +835,7 @@ export default function AdminPage() {
               </div>
             </motion.div>
 
-            {/* Demo tournaments to finalize */}
+            {/* Active Tournaments */}
             <div className="space-y-2">
               <h3 className="font-display font-bold text-sm text-muted-foreground uppercase tracking-wider">
                 Active Tournaments
@@ -540,24 +843,22 @@ export default function AdminPage() {
               {[...DEMO_FREE_TOURNAMENTS, ...DEMO_PAID_TOURNAMENTS].map((t) => (
                 <div
                   key={t.id.toString()}
-                  className="card-sporty p-4 flex items-center justify-between"
+                  className="card-sporty p-3 flex items-center justify-between"
                 >
                   <div>
                     <div className="font-display font-bold text-sm">
                       {t.name}
                     </div>
                     <div className="text-xs text-muted-foreground font-body">
-                      {t.isPaid ? `₹${Number(t.entryFee) / 100} entry` : "Free"}{" "}
-                      · {t.status}
+                      {t.isPaid ? `₹${Number(t.entryFee) / 100} entry` : "Free"}
                     </div>
                   </div>
                   <Button
-                    data-ocid="admin.tournament.finalize.button"
                     variant="outline"
                     size="sm"
                     onClick={() => handleFinalize(t.id, t.name)}
                     disabled={finalizeTournamentMutation.isPending}
-                    className="border-border font-body text-xs"
+                    className="text-xs border-border font-body h-8"
                   >
                     Finalize
                   </Button>
@@ -642,7 +943,9 @@ export default function AdminPage() {
                       <Input
                         type="number"
                         placeholder="0"
-                        value={dietForm[field.key as keyof typeof dietForm]}
+                        value={
+                          dietForm[field.key as keyof typeof dietForm] as string
+                        }
                         onChange={(e) =>
                           setDietForm((f) => ({
                             ...f,
@@ -653,6 +956,15 @@ export default function AdminPage() {
                       />
                     </div>
                   ))}
+                </div>
+                <div className="flex items-center justify-between rounded-lg border border-border bg-muted/20 px-4 py-3">
+                  <Label className="text-sm font-body">🥦 Vegetarian</Label>
+                  <Switch
+                    checked={dietForm.isVeg}
+                    onCheckedChange={(v) =>
+                      setDietForm((f) => ({ ...f, isVeg: v }))
+                    }
+                  />
                 </div>
                 <Button
                   data-ocid="admin.diet.submit.button"
@@ -680,7 +992,14 @@ export default function AdminPage() {
                         {entry.name}
                       </div>
                       <div className="text-xs text-muted-foreground font-body">
-                        {entry.category} · {entry.calories} kcal
+                        {entry.category} · {entry.calories} kcal ·{" "}
+                        <span
+                          className={
+                            entry.isVeg ? "text-green-400" : "text-red-400"
+                          }
+                        >
+                          {entry.isVeg ? "🥦 Veg" : "🍗 Non-Veg"}
+                        </span>
                       </div>
                     </div>
                     <Button

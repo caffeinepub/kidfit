@@ -5,6 +5,7 @@ import {
   Camera,
   CameraOff,
   CheckCircle,
+  Hand,
   RefreshCw,
   RotateCcw,
   Share2,
@@ -17,19 +18,16 @@ import { toast } from "sonner";
 import { useCamera } from "../camera/useCamera";
 import ShareResultModal from "../components/ShareResultModal";
 import { useLogPushups, useUserProfile } from "../hooks/useQueries";
+import { recordSession } from "../lib/pushUpStats";
 import { getTierFromXp } from "../lib/xp";
 
 type PosePhase = "up" | "down" | "unknown";
 
-// ─── Lightweight motion-based push-up detector ───────────────────────────────
-// No external ML libraries — uses canvas pixel analysis to track the vertical
-// centroid of motion in the frame. Loads instantly on any device.
-
-const SAMPLE_ROWS = 40; // vertical resolution for centroid sampling
-const MOTION_THRESH = 6; // lowered: more sensitive on mobile // pixel-difference threshold to count as motion
-const STABLE_FRAMES = 3; // lowered: faster phase commit // consecutive frames required before phase commit
-const MIN_REP_MS = 700; // lowered: faster rep registration // minimum ms between reps
-const PHASE_HYSTERESIS = 0.07; // lowered: detects smaller range // fraction of frame height between UP/DOWN zones
+const SAMPLE_ROWS = 40;
+const MOTION_THRESH = 6;
+const STABLE_FRAMES = 3;
+const MIN_REP_MS = 700;
+const PHASE_HYSTERESIS = 0.07;
 
 interface MotionState {
   prevGray: Uint8Array | null;
@@ -39,7 +37,6 @@ interface MotionState {
   seenDown: boolean;
   lastRepTime: number;
   lastTransition: number;
-  // rolling baseline of centroid position for auto-calibration
   centroidHistory: number[];
 }
 
@@ -56,10 +53,6 @@ function makeMotionState(): MotionState {
   };
 }
 
-/**
- * Analyse one video frame. Returns the committed phase and whether a new rep
- * was counted. Mutates `state` in place.
- */
 function analyseFrame(
   video: HTMLVideoElement,
   offscreenCtx: CanvasRenderingContext2D,
@@ -72,7 +65,6 @@ function analyseFrame(
   const imgData = offscreenCtx.getImageData(0, 0, W, H);
   const data = imgData.data;
 
-  // Convert to grayscale
   const gray = new Uint8Array(W * H);
   for (let i = 0; i < W * H; i++) {
     const r = data[i * 4];
@@ -85,7 +77,6 @@ function analyseFrame(
   let repCounted = false;
 
   if (state.prevGray !== null) {
-    // Compute per-row motion magnitude
     const rowH = Math.floor(H / SAMPLE_ROWS);
     let motionSum = 0;
     let centroidNumer = 0;
@@ -99,7 +90,7 @@ function analyseFrame(
           rowMotion += Math.abs(gray[idx] - state.prevGray[idx]);
         }
       }
-      rowMotion /= rowH * W; // normalise
+      rowMotion /= rowH * W;
       if (rowMotion > MOTION_THRESH / 10) {
         motionSum += rowMotion;
         centroidNumer += rowMotion * (row / SAMPLE_ROWS);
@@ -107,9 +98,7 @@ function analyseFrame(
     }
 
     if (motionSum > 0) {
-      const centroid = centroidNumer / motionSum; // 0 = top, 1 = bottom
-
-      // Maintain rolling history of centroids for auto-calibration
+      const centroid = centroidNumer / motionSum;
       state.centroidHistory.push(centroid);
       if (state.centroidHistory.length > 60) state.centroidHistory.shift();
 
@@ -121,15 +110,12 @@ function analyseFrame(
 
         let rawPhase: PosePhase = "unknown";
         if (range > PHASE_HYSTERESIS) {
-          // UP = centroid high in frame (small y fraction)
-          // DOWN = centroid low in frame (large y fraction)
           const upThreshold = lo + range * 0.35;
           const downThreshold = lo + range * 0.65;
           if (centroid <= upThreshold) rawPhase = "up";
           else if (centroid >= downThreshold) rawPhase = "down";
         }
 
-        // Require STABLE_FRAMES consecutive same-phase frames
         if (rawPhase !== "unknown") {
           if (rawPhase === state.stablePhase) {
             state.stableCount += 1;
@@ -175,8 +161,6 @@ function analyseFrame(
   return { phase, repCounted };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-
 export default function PushUpCounterPage() {
   const {
     videoRef,
@@ -202,6 +186,7 @@ export default function PushUpCounterPage() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [lastSessionCount, setLastSessionCount] = useState(0);
   const [calibrating, setCalibrating] = useState(false);
+  const [manualPulse, setManualPulse] = useState(false);
 
   const rafRef = useRef<number | null>(null);
   const offscreenRef = useRef<HTMLCanvasElement | null>(null);
@@ -214,7 +199,6 @@ export default function PushUpCounterPage() {
   const xp = profile ? Number(profile.xp) : 0;
   const tierInfo = getTierFromXp(xp);
 
-  // Create offscreen canvas once
   useEffect(() => {
     const c = document.createElement("canvas");
     c.width = 160;
@@ -223,7 +207,6 @@ export default function PushUpCounterPage() {
     offscreenCtxRef.current = c.getContext("2d", { willReadFrequently: true });
   }, []);
 
-  // Detection loop — pure canvas / pixel analysis, no CDN libs
   const detectLoop = useCallback(() => {
     const video = videoRef.current;
     const ctx = offscreenCtxRef.current;
@@ -256,7 +239,6 @@ export default function PushUpCounterPage() {
 
   useEffect(() => {
     if (isDetecting && isActive) {
-      // Short calibration window
       setCalibrating(true);
       const t = setTimeout(() => setCalibrating(false), 3000);
       rafRef.current = requestAnimationFrame(detectLoop);
@@ -291,7 +273,8 @@ export default function PushUpCounterPage() {
     }
     try {
       await logPushups(BigInt(count));
-      toast.success(`💪 ${count} push-ups logged! +${count * 10} XP earned!`);
+      recordSession(count);
+      toast.success(`💪 ${count} push-ups logged!`);
       setLastSessionCount(count);
       setShowShareModal(true);
     } catch {
@@ -306,6 +289,13 @@ export default function PushUpCounterPage() {
     motionStateRef.current = makeMotionState();
     setCalibrating(true);
     setTimeout(() => setCalibrating(false), 3000);
+  };
+
+  const handleManualRep = () => {
+    setCount((c) => c + 1);
+    setCountKey((k) => k + 1);
+    setManualPulse(true);
+    setTimeout(() => setManualPulse(false), 300);
   };
 
   const phaseIndicator = {
@@ -385,7 +375,6 @@ export default function PushUpCounterPage() {
             </div>
           )}
 
-          {/* Phase indicator */}
           {isActive && (
             <div
               className={cn(
@@ -398,7 +387,6 @@ export default function PushUpCounterPage() {
             </div>
           )}
 
-          {/* Calibrating overlay */}
           {isActive && calibrating && (
             <div className="absolute bottom-3 left-3 right-3 z-20 bg-card/80 rounded-xl px-3 py-2 text-xs text-muted-foreground font-body text-center">
               Calibrating motion... get into push-up position
@@ -434,12 +422,15 @@ export default function PushUpCounterPage() {
                 }}
                 className={cn(
                   "font-display font-black text-8xl leading-none mb-2 transition-colors duration-150",
-                  repPulse ? "text-yellow-300" : "text-neon-green",
+                  repPulse || manualPulse
+                    ? "text-yellow-300"
+                    : "text-neon-green",
                 )}
                 style={{
-                  textShadow: repPulse
-                    ? "0 0 40px oklch(0.9 0.28 90 / 0.8)"
-                    : "0 0 30px oklch(0.85 0.22 130 / 0.4)",
+                  textShadow:
+                    repPulse || manualPulse
+                      ? "0 0 40px oklch(0.9 0.28 90 / 0.8)"
+                      : "0 0 30px oklch(0.85 0.22 130 / 0.4)",
                 }}
               >
                 {count}
@@ -452,6 +443,41 @@ export default function PushUpCounterPage() {
             </div>
           </div>
         </motion.div>
+
+        {/* ===== MANUAL REP BUTTON ===== */}
+        {sessionStarted && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-2"
+          >
+            <button
+              data-ocid="pushup.manual_rep_button"
+              type="button"
+              onClick={handleManualRep}
+              className={cn(
+                "w-full rounded-2xl py-7 flex flex-col items-center justify-center gap-2 font-display font-black text-2xl transition-all duration-150 active:scale-95 select-none",
+                manualPulse ? "scale-95" : "scale-100",
+              )}
+              style={{
+                background: manualPulse
+                  ? "oklch(0.75 0.22 90)"
+                  : "linear-gradient(135deg, oklch(0.55 0.18 90), oklch(0.65 0.22 80))",
+                color: "oklch(0.12 0.04 42)",
+                boxShadow: manualPulse
+                  ? "0 0 30px oklch(0.85 0.22 90 / 0.6), inset 0 2px 8px rgba(0,0,0,0.2)"
+                  : "0 0 20px oklch(0.75 0.22 90 / 0.35), 0 4px 20px rgba(0,0,0,0.3)",
+              }}
+            >
+              <Hand className="w-8 h-8" />
+              TAP TO ADD REP
+            </button>
+            <p className="text-xs text-muted-foreground font-body text-center px-4">
+              Camera not working? Place phone below your face and tap the button
+              above after each push-up.
+            </p>
+          </motion.div>
+        )}
 
         {/* Instructions */}
         {!sessionStarted && (
@@ -468,16 +494,17 @@ export default function PushUpCounterPage() {
               <li>• Do push-ups — go DOWN close to the floor, then push UP</li>
               <li>• Camera tracks your body movement to count reps</li>
               <li>• Good lighting helps — avoid strong backlight behind you</li>
+              <li>• Camera not working? Use the manual tap button!</li>
             </ul>
           </div>
         )}
 
-        {/* Manual override during session */}
+        {/* Manual adjust during session */}
         {sessionStarted && (
           <div className="card-sporty p-3 flex items-center gap-3">
             <Zap className="w-4 h-4 text-neon-orange shrink-0" />
             <div className="text-xs text-muted-foreground font-body flex-1">
-              Not counting right? Tap + / - to adjust manually
+              Mis-count? Tap +/- to adjust
             </div>
             <div className="flex items-center gap-2">
               <Button
@@ -534,8 +561,7 @@ export default function PushUpCounterPage() {
                   "Saving..."
                 ) : (
                   <>
-                    <CheckCircle className="w-5 h-5 mr-2" /> Finish +
-                    {count * 10} XP
+                    <CheckCircle className="w-5 h-5 mr-2" /> Finish Session
                   </>
                 )}
               </Button>
@@ -561,7 +587,7 @@ export default function PushUpCounterPage() {
         open={showShareModal}
         onClose={() => setShowShareModal(false)}
         repCount={lastSessionCount}
-        xpEarned={lastSessionCount * 10}
+        xpEarned={0}
         username={username}
         tier={tierInfo.label}
       />

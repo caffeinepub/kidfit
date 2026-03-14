@@ -79,6 +79,21 @@ actor {
     fat : Nat;
   };
 
+
+  public type WorkoutExercise = {
+    name : Text;
+    sets : Nat;
+    reps : Nat;
+    notes : Text;
+  };
+
+  public type WorkoutPlan = {
+    id : Nat;
+    dayLabel : Text;
+    description : Text;
+    exercises : [WorkoutExercise];
+  };
+
   public type Battle = {
     code : Text;
     creator : Principal;
@@ -107,6 +122,8 @@ actor {
   let tournamentEntries = Map.empty<Nat, List.List<TournamentEntry>>();
   let adViews = Map.empty<Principal, List.List<Time.Time>>();
   let dietEntries = Map.empty<Nat, DietEntry>();
+  let workoutPlans = Map.empty<Nat, WorkoutPlan>();
+  var nextWorkoutPlanId = 0;
   let battles = Map.empty<Text, Battle>();
   let battleChats = Map.empty<Text, List.List<BattleChatMessage>>();
   var nextExerciseId = 0;
@@ -326,8 +343,6 @@ actor {
     };
     history.add(session);
     workoutSessions.add(caller, history);
-
-    await awardXp(caller, reps);
   };
 
   public shared ({ caller }) func logPushups(count : Nat) : async () {
@@ -347,8 +362,44 @@ actor {
     };
     history.add(session);
     workoutSessions.add(caller, history);
+  };
 
-    await awardXp(caller, count);
+  public query ({ caller }) func getWorkoutSessions() : async [WorkoutSession] {
+    switch (workoutSessions.get(caller)) {
+      case (null) { [] };
+      case (?sessions) { sessions.toArray() };
+    };
+  };
+
+  // *** Workout Plans ***
+
+
+  // *** Workout Plans ***
+  public shared ({ caller }) func addWorkoutPlan(plan : WorkoutPlan) : async Nat {
+    if (not (Authorization.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can add workout plans");
+    };
+    let id = nextWorkoutPlanId;
+    let planWithId : WorkoutPlan = {
+      id;
+      dayLabel = plan.dayLabel;
+      description = plan.description;
+      exercises = plan.exercises;
+    };
+    workoutPlans.add(id, planWithId);
+    nextWorkoutPlanId += 1;
+    id;
+  };
+
+  public shared ({ caller }) func deleteWorkoutPlan(id : Nat) : async () {
+    if (not (Authorization.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can delete workout plans");
+    };
+    ignore workoutPlans.remove(id);
+  };
+
+  public query func getWorkoutPlans() : async [WorkoutPlan] {
+    workoutPlans.values().toArray();
   };
 
   // *** Tournaments ***

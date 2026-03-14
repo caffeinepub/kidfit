@@ -83,6 +83,24 @@ export interface StripeConfiguration {
     allowedCountries: Array<string>;
     secretKey: string;
 }
+export interface WorkoutSession {
+    userId: string;
+    exerciseId: bigint;
+    reps: bigint;
+    timestamp: bigint;
+}
+export interface WorkoutExercise {
+    name: string;
+    sets: bigint;
+    reps: bigint;
+    notes: string;
+}
+export interface WorkoutPlan {
+    id: bigint;
+    dayLabel: string;
+    description: string;
+    exercises: Array<WorkoutExercise>;
+}
 export interface Battle {
     status: Variant_active_finished_waiting;
     creator: Principal;
@@ -130,12 +148,17 @@ export enum Variant_active_finished_waiting {
     waiting = "waiting"
 }
 export interface backendInterface {
+    addWorkoutPlan(plan: WorkoutPlan): Promise<bigint>;
+    deleteWorkoutPlan(id: bigint): Promise<void>;
+    getWorkoutPlans(): Promise<Array<WorkoutPlan>>;
+    getWorkoutSessions(): Promise<Array<WorkoutSession>>;
     addDietEntry(entry: DietEntry): Promise<void>;
     addExercise(exercise: Exercise): Promise<void>;
     addExerciseCategory(category: ExerciseCategory): Promise<void>;
     addXp(user: Principal, xp: bigint): Promise<void>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
     canSeeAd(): Promise<boolean>;
+    claimAdminRole(token: string): Promise<void>;
     createBattle(code: string): Promise<void>;
     createCheckoutSession(items: Array<ShoppingItem>, successUrl: string, cancelUrl: string): Promise<string>;
     createTournament(name: string, startDate: Time, endDate: Time, entryFee: bigint, isPaid: boolean): Promise<bigint>;

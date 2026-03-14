@@ -1,11 +1,15 @@
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Dumbbell, Star, Target, Trophy, User } from "lucide-react";
+import { Dumbbell, Lock, Star, Target, Trophy, User } from "lucide-react";
 import { motion } from "motion/react";
+import { useState } from "react";
 import { Tier } from "../backend.d";
 import DailyMissionCard from "../components/DailyMissionCard";
+import RewardedAdModal from "../components/RewardedAdModal";
 import TierBadge from "../components/TierBadge";
+import { useAdUnlock } from "../hooks/useAdUnlock";
+import { usePushUpStats } from "../hooks/usePushUpStats";
 import { useUserProfile } from "../hooks/useQueries";
 import {
   getTierFromXp,
@@ -44,6 +48,9 @@ const TIERS_NEXT: Partial<Record<Tier, Tier>> = {
 
 export default function HomePage({ onNavigate }: HomePageProps) {
   const { data: profile, isLoading } = useUserProfile();
+  const { isUnlocked, unlock } = useAdUnlock();
+  const { stats, refresh } = usePushUpStats();
+  const [adModalOpen, setAdModalOpen] = useState(false);
 
   const xp = profile ? Number(profile.xp) : 0;
   const level = profile ? Number(profile.level) : 1;
@@ -53,6 +60,12 @@ export default function HomePage({ onNavigate }: HomePageProps) {
   const xpToNext = getXpToNextTier(xp, xpTierInfo);
   const nextTier = TIERS_NEXT[tier];
   const nextTierInfo = nextTier ? getTierInfo(nextTier) : null;
+
+  const handleAdComplete = () => {
+    setAdModalOpen(false);
+    unlock();
+    refresh();
+  };
 
   const quickActions = [
     {
@@ -205,6 +218,117 @@ export default function HomePage({ onNavigate }: HomePageProps) {
           </div>
         </motion.div>
 
+        {/* Ad-Gated Progress Stats Card */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.18, duration: 0.4 }}
+          className="card-sporty p-5 relative overflow-hidden"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-display font-bold text-sm flex items-center gap-2">
+              <Lock className="w-4 h-4 text-primary" />🔒 Your Progress
+            </h2>
+            {isUnlocked && (
+              <span className="text-xs text-emerald-400 font-body font-medium">
+                ✓ Unlocked for 5 hrs
+              </span>
+            )}
+          </div>
+
+          {isUnlocked ? (
+            /* Unlocked — real stats */
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-muted/30 rounded-xl p-3 text-center">
+                  <div className="font-display font-black text-3xl text-primary">
+                    {stats.totalPushUps.toLocaleString()}
+                  </div>
+                  <div className="text-xs text-muted-foreground font-body mt-0.5">
+                    Total Push-Ups
+                  </div>
+                </div>
+                <div className="bg-muted/30 rounded-xl p-3 text-center">
+                  <div className="font-display font-black text-3xl text-neon-cyan">
+                    {stats.sessionCount}
+                  </div>
+                  <div className="text-xs text-muted-foreground font-body mt-0.5">
+                    {stats.sessionCount === 1
+                      ? "1 time"
+                      : `${stats.sessionCount} times`}
+                  </div>
+                </div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground font-body mb-2 font-medium uppercase tracking-wide">
+                  Badges Earned
+                </div>
+                {stats.badges.length === 0 ? (
+                  <p className="text-xs text-muted-foreground font-body italic">
+                    Complete sessions to earn badges!
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {stats.badges.map((badge) => (
+                      <span
+                        key={badge.id}
+                        className="inline-flex items-center gap-1 text-xs bg-primary/10 border border-primary/30 text-primary rounded-full px-2.5 py-1 font-body font-medium"
+                      >
+                        {badge.emoji} {badge.label}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            /* Locked — blurred preview + CTA */
+            <div className="relative">
+              <div className="filter blur-sm pointer-events-none select-none">
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div className="bg-muted/30 rounded-xl p-3 text-center">
+                    <div className="font-display font-black text-3xl text-primary">
+                      247
+                    </div>
+                    <div className="text-xs text-muted-foreground font-body mt-0.5">
+                      Total Push-Ups
+                    </div>
+                  </div>
+                  <div className="bg-muted/30 rounded-xl p-3 text-center">
+                    <div className="font-display font-black text-3xl text-neon-cyan">
+                      12
+                    </div>
+                    <div className="text-xs text-muted-foreground font-body mt-0.5">
+                      12 times
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <span className="inline-flex items-center gap-1 text-xs bg-primary/10 border border-primary/30 text-primary rounded-full px-2.5 py-1 font-body">
+                    🎯 First Rep
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-xs bg-primary/10 border border-primary/30 text-primary rounded-full px-2.5 py-1 font-body">
+                    💪 10 Rep Club
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-xs bg-primary/10 border border-primary/30 text-primary rounded-full px-2.5 py-1 font-body">
+                    🥈 50 Rep Club
+                  </span>
+                </div>
+              </div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Button
+                  data-ocid="home.unlock_stats.button"
+                  onClick={() => setAdModalOpen(true)}
+                  className="bg-primary text-primary-foreground font-display font-bold text-sm glow-green gap-2 shadow-lg"
+                >
+                  <Lock className="w-4 h-4" />
+                  Watch Ad to Unlock Stats
+                </Button>
+              </div>
+            </div>
+          )}
+        </motion.div>
+
         {/* Quick Action Buttons */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
@@ -283,6 +407,14 @@ export default function HomePage({ onNavigate }: HomePageProps) {
           </div>
         </motion.div>
       </main>
+
+      <RewardedAdModal
+        open={adModalOpen}
+        onComplete={handleAdComplete}
+        onCancel={() => setAdModalOpen(false)}
+        title="Unlock Your Stats"
+        description="Watch a 15-second ad to see your progress"
+      />
     </div>
   );
 }

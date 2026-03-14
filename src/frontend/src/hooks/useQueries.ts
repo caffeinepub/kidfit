@@ -7,6 +7,7 @@ import type {
   LeaderboardEntry,
   TournamentEntry,
   UserProfile,
+  WorkoutPlan,
 } from "../backend.d";
 import { useActor } from "./useActor";
 
@@ -403,7 +404,7 @@ export function useUpdateBattleScore() {
 }
 
 export function useGetBattle(code: string | null) {
-  const { actor, isFetching } = useActor();
+  const { actor } = useActor();
   return useQuery<Battle | null>({
     queryKey: ["battle", code],
     queryFn: async () => {
@@ -414,13 +415,13 @@ export function useGetBattle(code: string | null) {
       }
       return result as Battle | null;
     },
-    enabled: !!actor && !!code && !isFetching,
+    enabled: !!actor && !!code,
     refetchInterval: 3000,
   });
 }
 
 export function useGetBattleChats(code: string | null) {
-  const { actor, isFetching } = useActor();
+  const { actor } = useActor();
   return useQuery<BattleChatMessage[]>({
     queryKey: ["battleChats", code],
     queryFn: async () => {
@@ -428,8 +429,9 @@ export function useGetBattleChats(code: string | null) {
       const result = await actor.getBattleChats(code);
       return result as BattleChatMessage[];
     },
-    enabled: !!actor && !!code && !isFetching,
-    refetchInterval: 2000,
+    enabled: !!actor && !!code,
+    refetchInterval: 1500,
+    staleTime: 0,
   });
 }
 
@@ -447,6 +449,53 @@ export function useSendBattleChat() {
       queryClient.invalidateQueries({
         queryKey: ["battleChats", variables.code],
       });
+    },
+  });
+}
+
+// ===== WORKOUT PLANS =====
+type ActorWithWorkout = {
+  getWorkoutPlans(): Promise<WorkoutPlan[]>;
+  addWorkoutPlan(plan: WorkoutPlan): Promise<bigint>;
+  deleteWorkoutPlan(id: bigint): Promise<void>;
+};
+
+export function useGetWorkoutPlans() {
+  const { actor, isFetching } = useActor();
+  return useQuery<WorkoutPlan[]>({
+    queryKey: ["workoutPlans"],
+    queryFn: async () => {
+      if (!actor) return [];
+      return (actor as unknown as ActorWithWorkout).getWorkoutPlans();
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
+
+export function useAddWorkoutPlan() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (plan: WorkoutPlan) => {
+      if (!actor) throw new Error("No actor");
+      return (actor as unknown as ActorWithWorkout).addWorkoutPlan(plan);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workoutPlans"] });
+    },
+  });
+}
+
+export function useDeleteWorkoutPlan() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: bigint) => {
+      if (!actor) throw new Error("No actor");
+      await (actor as unknown as ActorWithWorkout).deleteWorkoutPlan(id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workoutPlans"] });
     },
   });
 }

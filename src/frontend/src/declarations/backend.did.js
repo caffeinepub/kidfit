@@ -125,6 +125,7 @@ export const idlService = IDL.Service({
   'addXp' : IDL.Func([IDL.Principal, IDL.Nat], [], []),
   'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
   'canSeeAd' : IDL.Func([], [IDL.Bool], ['query']),
+    'claimAdminRole' : IDL.Func([IDL.Text], [], []),
   'createBattle' : IDL.Func([IDL.Text], [], []),
   'createCheckoutSession' : IDL.Func(
       [IDL.Vec(ShoppingItem), IDL.Text, IDL.Text],
@@ -303,6 +304,7 @@ export const idlFactory = ({ IDL }) => {
     'addXp' : IDL.Func([IDL.Principal, IDL.Nat], [], []),
     'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
     'canSeeAd' : IDL.Func([], [IDL.Bool], ['query']),
+    'claimAdminRole' : IDL.Func([IDL.Text], [], []),
     'createBattle' : IDL.Func([IDL.Text], [], []),
     'createCheckoutSession' : IDL.Func(
         [IDL.Vec(ShoppingItem), IDL.Text, IDL.Text],

@@ -219,6 +219,7 @@ export interface backendInterface {
     addXp(user: Principal, xp: bigint): Promise<void>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
     canSeeAd(): Promise<boolean>;
+    claimAdminRole(token: string): Promise<void>;
     createBattle(code: string): Promise<void>;
     createCheckoutSession(items: Array<ShoppingItem>, successUrl: string, cancelUrl: string): Promise<string>;
     createTournament(name: string, startDate: Time, endDate: Time, entryFee: bigint, isPaid: boolean): Promise<bigint>;
@@ -349,6 +350,20 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.canSeeAd();
+            return result;
+        }
+    }
+    async claimAdminRole(arg0: string): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.claimAdminRole(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.claimAdminRole(arg0);
             return result;
         }
     }

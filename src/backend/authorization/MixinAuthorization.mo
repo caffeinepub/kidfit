@@ -15,6 +15,18 @@ mixin (accessControlState : AccessControl.AccessControlState) {
     };
   };
 
+  // Always claims admin for the caller if the correct token is provided
+  public shared ({ caller }) func claimAdminRole(userSecret : Text) : async () {
+    switch (Prim.envVar<system>("CAFFEINE_ADMIN_TOKEN")) {
+      case (null) {
+        Runtime.trap("CAFFEINE_ADMIN_TOKEN environment variable is not set");
+      };
+      case (?adminToken) {
+        AccessControl.claimAdmin(accessControlState, caller, adminToken, userSecret);
+      };
+    };
+  };
+
   public query ({ caller }) func getCallerUserRole() : async AccessControl.UserRole {
     AccessControl.getUserRole(accessControlState, caller);
   };

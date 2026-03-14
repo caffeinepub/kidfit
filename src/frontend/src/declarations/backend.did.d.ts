@@ -117,6 +117,7 @@ export interface _SERVICE {
   'addXp' : ActorMethod<[Principal, bigint], undefined>,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
   'canSeeAd' : ActorMethod<[], boolean>,
+  'claimAdminRole' : ActorMethod<[string], undefined>,
   'createBattle' : ActorMethod<[string], undefined>,
   'createCheckoutSession' : ActorMethod<
     [Array<ShoppingItem>, string, string],
