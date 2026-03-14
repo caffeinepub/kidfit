@@ -37,17 +37,6 @@ module {
     };
   };
 
-  // Always grants admin to the caller if the correct token is provided (bypasses adminAssigned).
-  public func claimAdmin(state : AccessControlState, caller : Principal, adminToken : Text, userProvidedToken : Text) {
-    if (caller.isAnonymous()) { return };
-    if (userProvidedToken == adminToken) {
-      state.userRoles.add(caller, #admin);
-      state.adminAssigned := true;
-    } else {
-      Runtime.trap("Invalid admin token");
-    };
-  };
-
   public func getUserRole(state : AccessControlState, caller : Principal) : UserRole {
     if (caller.isAnonymous()) { return #guest };
     switch (state.userRoles.get(caller)) {

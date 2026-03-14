@@ -581,6 +581,103 @@ export default function PushUpCounterPage() {
             Share My Result
           </Button>
         )}
+
+        {/* Tuesday Workout Plan */}
+        <div className="card-sporty p-4 space-y-3">
+          <div>
+            <h3 className="font-display font-bold text-base text-yellow-400 uppercase tracking-wide">
+              TUESDAY - CHEST AND BICEPS WORKOUT (TEENS)
+            </h3>
+            <p className="text-xs text-muted-foreground font-body mt-1">
+              For teens who can't go to the gym — use bags or something heavy
+              with a good grip instead of dumbbells.
+            </p>
+          </div>
+          <div className="space-y-2">
+            {(
+              [
+                {
+                  name: "Jumping Jacks",
+                  sets: null,
+                  reps: null,
+                  duration: "60 seconds",
+                },
+                {
+                  name: "Declined Push Ups",
+                  sets: 3,
+                  reps: "15 reps",
+                  duration: null,
+                },
+                { name: "Push Ups", sets: 3, reps: "20 reps", duration: null },
+                {
+                  name: "Inclined Push Ups",
+                  sets: 2,
+                  reps: "25 reps",
+                  duration: null,
+                },
+                {
+                  name: "Alternate Curls",
+                  sets: 2,
+                  reps: "8-10 reps",
+                  duration: null,
+                },
+                {
+                  name: "Hammer Curls (Alternating)",
+                  sets: 2,
+                  reps: "8-10 reps",
+                  duration: null,
+                },
+                {
+                  name: "Bicep Curls (Both Hands)",
+                  sets: 2,
+                  reps: "6-8 reps",
+                  duration: null,
+                },
+                {
+                  name: "Hammer Curls (Both Hands)",
+                  sets: 2,
+                  reps: "6-8 reps",
+                  duration: null,
+                },
+                {
+                  name: "Cobra Pose (Stretching)",
+                  sets: null,
+                  reps: null,
+                  duration: "30 seconds",
+                },
+                {
+                  name: "Cat Cow Pose",
+                  sets: null,
+                  reps: null,
+                  duration: "30 seconds",
+                },
+                {
+                  name: "Tadasana (Mountain Pose)",
+                  sets: null,
+                  reps: null,
+                  duration: "30 seconds",
+                },
+              ] as {
+                name: string;
+                sets: number | null;
+                reps: string | null;
+                duration: string | null;
+              }[]
+            ).map((ex) => (
+              <div
+                key={ex.name}
+                className="flex items-center justify-between bg-muted/30 rounded-xl px-3 py-2"
+              >
+                <span className="text-sm font-body text-foreground">
+                  {ex.name}
+                </span>
+                <span className="text-xs font-bold text-yellow-400 font-display shrink-0 ml-2">
+                  {ex.duration ? ex.duration : `${ex.sets} sets × ${ex.reps}`}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
       </main>
 
       <ShareResultModal
