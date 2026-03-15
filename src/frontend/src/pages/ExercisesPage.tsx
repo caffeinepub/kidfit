@@ -29,6 +29,99 @@ import {
   useLogWorkoutSession,
 } from "../hooks/useQueries";
 
+// ─── Exercise Image Lookup ───────────────────────────────────────────────────
+
+function getExerciseImage(name: string): string | null {
+  const n = name.toLowerCase();
+  if (n.includes("jumping jack"))
+    return "/assets/generated/exercise-jumping-jacks.dim_400x400.jpg";
+  if (n.includes("declined push"))
+    return "/assets/generated/exercise-declined-pushups.dim_400x400.jpg";
+  if (n.includes("inclined push"))
+    return "/assets/generated/exercise-inclined-pushups.dim_400x400.jpg";
+  if (n.includes("push up") || n.includes("push-up"))
+    return "/assets/generated/exercise-pushups.dim_400x400.jpg";
+  if (n.includes("alternate curl"))
+    return "/assets/generated/exercise-alternate-curls.dim_400x400.jpg";
+  if (
+    n.includes("hammer curl") &&
+    (n.includes("altern") || n.includes("alternating"))
+  )
+    return "/assets/generated/exercise-hammer-curls-alt.dim_400x400.jpg";
+  if (n.includes("bicep curl") && n.includes("both"))
+    return "/assets/generated/exercise-bicep-curls-both.dim_400x400.jpg";
+  if (n.includes("hammer curl") && n.includes("both"))
+    return "/assets/generated/exercise-hammer-curls-both.dim_400x400.jpg";
+  if (n.includes("chair dip"))
+    return "/assets/generated/exercise-chair-dips.dim_400x400.jpg";
+  if (n.includes("skull crusher"))
+    return "/assets/generated/exercise-skull-crushers.dim_400x400.jpg";
+  if (n.includes("cobra"))
+    return "/assets/generated/exercise-cobra-pose.dim_400x400.jpg";
+  if (n.includes("cat cow"))
+    return "/assets/generated/exercise-cat-cow-pose.dim_400x400.jpg";
+  if (
+    (n.includes("tadasana") || n.includes("mountain pose")) &&
+    !n.includes("mountain climber")
+  )
+    return "/assets/generated/exercise-tadasana.dim_400x400.jpg";
+  if (n.includes("crucifix"))
+    return "/assets/generated/exercise-crucifix-crunches.dim_400x400.jpg";
+  if (n.includes("hollow body"))
+    return "/assets/generated/exercise-hollow-body-hold.dim_400x400.jpg";
+  if (n.includes("leg raise"))
+    return "/assets/generated/exercise-leg-raises.dim_400x400.jpg";
+  if (n.includes("side plank"))
+    return "/assets/generated/exercise-side-plank-raises.dim_400x400.jpg";
+  if (n.includes("leaning back row"))
+    return "/assets/generated/exercise-leaning-back-rows.dim_400x400.jpg";
+  if (n.includes("low back row"))
+    return "/assets/generated/exercise-single-dumbbell-rows.dim_400x400.jpg";
+  if (n.includes("leaning rear fly") || n.includes("leaning rear flye"))
+    return "/assets/generated/exercise-leaning-rear-flyes.dim_400x400.jpg";
+  if (n.includes("rear delt fly") || n.includes("rear delt flye"))
+    return "/assets/generated/exercise-alt-rear-delt-flyes.dim_400x400.jpg";
+  if (n.includes("front raise"))
+    return "/assets/generated/exercise-front-raises.dim_400x400.jpg";
+  if (n.includes("lateral raise"))
+    return "/assets/generated/exercise-lateral-raises.dim_400x400.jpg";
+  if (n.includes("goblet squat"))
+    return "/assets/generated/exercise-goblet-squats.dim_400x400.jpg";
+  if (n.includes("sumo squat"))
+    return "/assets/generated/exercise-sumo-squats.dim_400x400.jpg";
+  if (n.includes("calf raise"))
+    return "/assets/generated/exercise-calf-raises.dim_400x400.jpg";
+  if (n.includes("bulgarian"))
+    return "/assets/generated/exercise-bulgarian-squats.dim_400x400.jpg";
+  if (n.includes("romanian deadlift"))
+    return "/assets/generated/exercise-romanian-deadlifts.dim_400x400.jpg";
+  if (n.includes("burpee"))
+    return "/assets/generated/exercise-burpees.dim_400x400.jpg";
+  if (n.includes("high knee"))
+    return "/assets/generated/exercise-high-knees.dim_400x400.jpg";
+  if (n.includes("mountain climber"))
+    return "/assets/generated/exercise-mountain-climbers.dim_400x400.jpg";
+  if (n.includes("jump squat"))
+    return "/assets/generated/exercise-jump-squats.dim_400x400.jpg";
+  if (n.includes("plank hold"))
+    return "/assets/generated/exercise-plank-hold.dim_400x400.jpg";
+  if (n.includes("downward dog"))
+    return "/assets/generated/exercise-downward-dog.dim_400x400.jpg";
+  if (n.includes("warrior i") && !n.includes("warrior ii"))
+    return "/assets/generated/exercise-warrior-1.dim_400x400.jpg";
+  if (n.includes("warrior ii"))
+    return "/assets/generated/exercise-warrior-2.dim_400x400.jpg";
+  if (n.includes("tree pose"))
+    return "/assets/generated/exercise-tree-pose.dim_400x400.jpg";
+  if (n.includes("child") || n.includes("balasana"))
+    return "/assets/generated/exercise-childs-pose.dim_400x400.jpg";
+  if (n.includes("seated forward bend"))
+    return "/assets/generated/exercise-seated-forward-bend.dim_400x400.jpg";
+  if (n.includes("savasana") || n.includes("corpse pose"))
+    return "/assets/generated/exercise-savasana.dim_400x400.jpg";
+  return null;
+}
+
 // ─── Workout Plan Data ──────────────────────────────────────────────────────
 
 type ExerciseType = "WARMUP" | "STRENGTH" | "STRETCH";
@@ -39,6 +132,7 @@ interface WorkoutExercise {
   sets?: number;
   reps?: string;
   duration?: number; // seconds
+  note?: string;
 }
 
 type WorkoutCategory = "home" | "gym" | "fatloss" | "yoga";
@@ -57,7 +151,7 @@ const WORKOUT_PLANS: WorkoutPlan[] = [
   {
     id: "tuesday",
     category: "home" as WorkoutCategory,
-    title: "CHEST & BICEPS WORKOUT (TEENS)",
+    title: "CHEST, BICEPS & TRICEPS WORKOUT (TEENS)",
     day: "Tuesday",
     emoji: "💪",
     description:
@@ -85,6 +179,13 @@ const WORKOUT_PLANS: WorkoutPlan[] = [
         type: "STRENGTH",
         sets: 2,
         reps: "6–8 reps",
+      },
+      { name: "Chair Dips", type: "STRENGTH", sets: 2, reps: "30 reps" },
+      {
+        name: "Overhead Skull Crushers",
+        type: "STRENGTH",
+        sets: 2,
+        reps: "12 reps",
       },
       { name: "Cobra Pose", type: "STRETCH", duration: 30 },
       { name: "Cat Cow Pose", type: "STRETCH", duration: 30 },
@@ -205,33 +306,77 @@ const WORKOUT_PLANS: WorkoutPlan[] = [
 
 const GYM_PLANS: WorkoutPlan[] = [
   {
-    id: "gym-chest-triceps",
-    title: "CHEST & TRICEPS",
-    day: "Gym",
-    emoji: "🏋️",
-    description: "Build chest and triceps with gym equipment",
+    id: "gym-chest-biceps-triceps",
+    title: "CHEST, BICEPS & TRICEPS – GYM",
+    day: "Tuesday – Gym",
+    emoji: "💪",
+    description:
+      "Same movements, heavier load. Use gym equipment for maximum gains.",
     category: "gym",
     exercises: [
       { name: "Jumping Jacks", type: "WARMUP", duration: 60 },
       {
-        name: "Barbell Bench Press",
+        name: "Declined Push Ups",
         type: "STRENGTH",
-        sets: 4,
+        sets: 2,
         reps: "8–10 reps",
+        note: "More weight, less reps and sets",
       },
       {
-        name: "Incline Dumbbell Press",
+        name: "Push Ups",
         type: "STRENGTH",
-        sets: 3,
-        reps: "10–12 reps",
+        sets: 2,
+        reps: "8–10 reps",
+        note: "More weight, less reps and sets",
       },
-      { name: "Cable Flyes", type: "STRENGTH", sets: 3, reps: "12–15 reps" },
-      { name: "Tricep Pushdown", type: "STRENGTH", sets: 3, reps: "12 reps" },
       {
-        name: "Overhead Tricep Extension",
+        name: "Inclined Push Ups",
         type: "STRENGTH",
-        sets: 3,
-        reps: "10 reps",
+        sets: 2,
+        reps: "8–10 reps",
+        note: "More weight, less reps and sets",
+      },
+      {
+        name: "Alternate Curls",
+        type: "STRENGTH",
+        sets: 2,
+        reps: "8–10 reps",
+        note: "More weight, less reps and sets",
+      },
+      {
+        name: "Hammer Curls (Alternating)",
+        type: "STRENGTH",
+        sets: 2,
+        reps: "8–10 reps",
+        note: "More weight, less reps and sets",
+      },
+      {
+        name: "Bicep Curls (Both Hands)",
+        type: "STRENGTH",
+        sets: 2,
+        reps: "8–10 reps",
+        note: "More weight, less reps and sets",
+      },
+      {
+        name: "Hammer Curls (Both Hands)",
+        type: "STRENGTH",
+        sets: 2,
+        reps: "8–10 reps",
+        note: "More weight, less reps and sets",
+      },
+      {
+        name: "Chair Dips",
+        type: "STRENGTH",
+        sets: 2,
+        reps: "8–10 reps",
+        note: "More weight, less reps and sets",
+      },
+      {
+        name: "Overhead Skull Crushers",
+        type: "STRENGTH",
+        sets: 2,
+        reps: "8–10 reps",
+        note: "More weight, less reps and sets",
       },
       { name: "Cobra Pose", type: "STRETCH", duration: 30 },
       { name: "Cat Cow Pose", type: "STRETCH", duration: 30 },
@@ -239,34 +384,106 @@ const GYM_PLANS: WorkoutPlan[] = [
     ],
   },
   {
-    id: "gym-back-biceps",
-    title: "BACK & BICEPS",
-    day: "Gym",
-    emoji: "💪",
-    description: "Pull movements for a strong back and big arms",
+    id: "gym-abs",
+    title: "ABS WORKOUT – GYM",
+    day: "Wednesday – Gym",
+    emoji: "🔥",
+    description:
+      "Core-focused training with heavier resistance for maximum abs definition.",
     category: "gym",
     exercises: [
       { name: "Jumping Jacks", type: "WARMUP", duration: 60 },
       {
-        name: "Pull Ups / Lat Pulldown",
+        name: "Crucifix Crunches",
         type: "STRENGTH",
-        sets: 4,
+        sets: 2,
         reps: "8–10 reps",
+        note: "More weight, less reps and sets",
       },
       {
-        name: "Seated Cable Row",
+        name: "Hollow Body Hold",
         type: "STRENGTH",
-        sets: 3,
-        reps: "10–12 reps",
+        sets: 2,
+        reps: "8–10 reps",
+        note: "More weight, less reps and sets",
       },
       {
-        name: "Dumbbell Row",
+        name: "Leg Raises",
         type: "STRENGTH",
-        sets: 3,
-        reps: "10 reps each side",
+        sets: 2,
+        reps: "8–10 reps",
+        note: "More weight, less reps and sets",
       },
-      { name: "Barbell Curl", type: "STRENGTH", sets: 3, reps: "10 reps" },
-      { name: "Hammer Curl", type: "STRENGTH", sets: 3, reps: "10 reps" },
+      {
+        name: "Side Plank Raises (Left Side)",
+        type: "STRENGTH",
+        sets: 2,
+        reps: "8–10 reps",
+        note: "More weight, less reps and sets",
+      },
+      {
+        name: "Side Plank Raises (Right Side)",
+        type: "STRENGTH",
+        sets: 2,
+        reps: "8–10 reps",
+        note: "More weight, less reps and sets",
+      },
+      { name: "Cobra Pose", type: "STRETCH", duration: 30 },
+      { name: "Cat Cow Pose", type: "STRETCH", duration: 30 },
+      { name: "Tadasana (Mountain Pose)", type: "STRETCH", duration: 30 },
+    ],
+  },
+  {
+    id: "gym-back-shoulders",
+    title: "BACK & SHOULDERS – GYM",
+    day: "Thursday – Gym",
+    emoji: "🏋️",
+    description: "Pull heavy for a wider back and stronger shoulders.",
+    category: "gym",
+    exercises: [
+      { name: "Jumping Jacks", type: "WARMUP", duration: 60 },
+      {
+        name: "Leaning Back Rows",
+        type: "STRENGTH",
+        sets: 2,
+        reps: "8–10 reps",
+        note: "More weight, less reps and sets",
+      },
+      {
+        name: "Single Dumbbell Low Back Rows",
+        type: "STRENGTH",
+        sets: 2,
+        reps: "8–10 reps",
+        note: "More weight, less reps and sets",
+      },
+      {
+        name: "Leaning Rear Flyes",
+        type: "STRENGTH",
+        sets: 2,
+        reps: "8–10 reps",
+        note: "More weight, less reps and sets",
+      },
+      {
+        name: "Alternative Rear Delt Flyes",
+        type: "STRENGTH",
+        sets: 2,
+        reps: "8–10 reps",
+        note: "More weight, less reps and sets",
+      },
+      {
+        name: "Front Raises",
+        type: "STRENGTH",
+        sets: 2,
+        reps: "8–10 reps",
+        note: "More weight, less reps and sets",
+      },
+      {
+        name: "Lateral Raises",
+        type: "STRENGTH",
+        sets: 2,
+        reps: "8–10 reps",
+        note: "More weight, less reps and sets",
+      },
       { name: "Cobra Pose", type: "STRETCH", duration: 30 },
       { name: "Cat Cow Pose", type: "STRETCH", duration: 30 },
       { name: "Tadasana (Mountain Pose)", type: "STRETCH", duration: 30 },
@@ -275,17 +492,54 @@ const GYM_PLANS: WorkoutPlan[] = [
   {
     id: "gym-legs",
     title: "LEGS – GYM",
-    day: "Gym",
+    day: "Friday – Gym",
     emoji: "🦵",
-    description: "Heavy leg day with full gym equipment",
+    description: "Heavier loads for stronger legs. Focus on form first.",
     category: "gym",
     exercises: [
       { name: "Jumping Jacks", type: "WARMUP", duration: 60 },
-      { name: "Barbell Squat", type: "STRENGTH", sets: 4, reps: "8–10 reps" },
-      { name: "Leg Press", type: "STRENGTH", sets: 3, reps: "10–12 reps" },
-      { name: "Romanian Deadlift", type: "STRENGTH", sets: 3, reps: "10 reps" },
-      { name: "Leg Curl", type: "STRENGTH", sets: 3, reps: "12 reps" },
-      { name: "Calf Raises", type: "STRENGTH", sets: 3, reps: "15 reps" },
+      {
+        name: "Goblet Squats",
+        type: "STRENGTH",
+        sets: 2,
+        reps: "8–10 reps",
+        note: "More weight, less reps and sets",
+      },
+      {
+        name: "Sumo Squats",
+        type: "STRENGTH",
+        sets: 2,
+        reps: "8–10 reps",
+        note: "More weight, less reps and sets",
+      },
+      {
+        name: "Calf Raises",
+        type: "STRENGTH",
+        sets: 2,
+        reps: "8–10 reps",
+        note: "More weight, less reps and sets",
+      },
+      {
+        name: "Bulgarian Squats (Left Leg)",
+        type: "STRENGTH",
+        sets: 2,
+        reps: "8–10 reps",
+        note: "More weight, less reps and sets",
+      },
+      {
+        name: "Bulgarian Squats (Right Leg)",
+        type: "STRENGTH",
+        sets: 2,
+        reps: "8–10 reps",
+        note: "More weight, less reps and sets",
+      },
+      {
+        name: "Single Dumbbell Romanian Deadlifts",
+        type: "STRENGTH",
+        sets: 2,
+        reps: "8–10 reps",
+        note: "More weight, less reps and sets",
+      },
       { name: "Cobra Pose", type: "STRETCH", duration: 30 },
       { name: "Cat Cow Pose", type: "STRETCH", duration: 30 },
       { name: "Tadasana (Mountain Pose)", type: "STRETCH", duration: 30 },
@@ -573,6 +827,14 @@ function WorkoutOverlay({
             {step.kind === "timed" && (
               <>
                 <TypeBadge type={step.exercise.type} />
+                {getExerciseImage(step.exercise.name) && (
+                  <img
+                    src={getExerciseImage(step.exercise.name) ?? ""}
+                    alt={step.exercise.name}
+                    className="w-48 h-48 rounded-2xl object-cover mx-auto"
+                    style={{ border: "1px solid rgba(212,175,55,0.35)" }}
+                  />
+                )}
                 <h2 className="text-white font-display font-black text-3xl text-center leading-tight">
                   {step.exercise.name}
                 </h2>
@@ -587,6 +849,14 @@ function WorkoutOverlay({
             {step.kind === "strength" && (
               <>
                 <TypeBadge type="STRENGTH" />
+                {getExerciseImage(step.exercise.name) && (
+                  <img
+                    src={getExerciseImage(step.exercise.name) ?? ""}
+                    alt={step.exercise.name}
+                    className="w-48 h-48 rounded-2xl object-cover mx-auto"
+                    style={{ border: "1px solid rgba(212,175,55,0.35)" }}
+                  />
+                )}
                 <h2 className="text-white font-display font-black text-3xl text-center leading-tight">
                   {step.exercise.name}
                 </h2>
@@ -607,7 +877,11 @@ function WorkoutOverlay({
                     Set {step.setNum} of {step.totalSets}
                   </div>
                 </div>
-                {step.exercise.type === "STRENGTH" && (
+                {step.exercise.note ? (
+                  <p className="text-amber-400/60 text-xs font-body text-center font-semibold">
+                    💡 {step.exercise.note}
+                  </p>
+                ) : (
                   <p className="text-white/30 text-xs font-body text-center">
                     Use bags or household items instead of dumbbells
                   </p>
@@ -740,7 +1014,9 @@ export default function ExercisesPage() {
   const [reps, setReps] = useState(10);
   const [logModalOpen, setLogModalOpen] = useState(false);
   const [workoutActive, setWorkoutActive] = useState(false);
-  const [activeCategory, setActiveCategory] = useState<WorkoutCategory>("home");
+  const [activeCategory, setActiveCategory] = useState<WorkoutCategory | null>(
+    "home",
+  );
   const [activeWorkoutExercises, setActiveWorkoutExercises] = useState<
     WorkoutExercise[]
   >([]);
@@ -850,7 +1126,9 @@ export default function ExercisesPage() {
                   type="button"
                   key={key}
                   data-ocid={`train.${key}.tab`}
-                  onClick={() => setActiveCategory(key)}
+                  onClick={() =>
+                    setActiveCategory((prev) => (prev === key ? null : key))
+                  }
                   className="flex-1 flex flex-col items-center py-2 px-1 rounded-xl text-xs font-display font-bold transition-all duration-200"
                   style={
                     activeCategory === key
@@ -868,63 +1146,64 @@ export default function ExercisesPage() {
             </div>
 
             {/* Plan cards for active category */}
-            {ALL_PLANS_BY_CATEGORY[activeCategory].map((plan, index) => (
-              <motion.div
-                key={plan.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.07 }}
-                className="rounded-2xl p-4"
-                style={{
-                  background:
-                    "linear-gradient(135deg, rgba(212,175,55,0.15) 0%, rgba(212,175,55,0.05) 100%)",
-                  border: "1px solid rgba(212,175,55,0.35)",
-                }}
-              >
-                <div className="flex items-start gap-3">
-                  <div
-                    className="w-11 h-11 rounded-xl flex items-center justify-center text-xl shrink-0"
-                    style={{ background: "rgba(212,175,55,0.2)" }}
-                  >
-                    {plan.emoji}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div
-                      className="font-display font-black text-xs uppercase tracking-widest mb-0.5"
-                      style={{ color: "rgba(212,175,55,0.6)" }}
-                    >
-                      {plan.day}
-                    </div>
-                    <h2
-                      className="font-display font-black text-sm leading-tight mb-0.5"
-                      style={{ color: "#D4AF37" }}
-                    >
-                      {plan.title}
-                    </h2>
-                    <p className="text-white/40 text-xs font-body leading-snug">
-                      {plan.description}
-                    </p>
-                    <div className="flex items-center gap-2 mt-2 flex-wrap">
-                      <span className="text-white/30 text-xs font-body">
-                        {plan.exercises.length} exercises
-                      </span>
-                      <span className="text-white/20 text-xs">•</span>
-                      <span className="text-white/30 text-xs font-body">
-                        ~{estimateMinutes(plan.exercises)} min
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <Button
-                  data-ocid={`workout.plan.start_button.${index + 1}`}
-                  onClick={() => handleStartWorkout(plan)}
-                  className="w-full mt-3 h-11 font-display font-black text-sm rounded-xl"
-                  style={{ background: "#D4AF37", color: "#1F1F1F" }}
+            {activeCategory &&
+              ALL_PLANS_BY_CATEGORY[activeCategory].map((plan, index) => (
+                <motion.div
+                  key={plan.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.07 }}
+                  className="rounded-2xl p-4"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, rgba(212,175,55,0.15) 0%, rgba(212,175,55,0.05) 100%)",
+                    border: "1px solid rgba(212,175,55,0.35)",
+                  }}
                 >
-                  Start Workout ▶
-                </Button>
-              </motion.div>
-            ))}
+                  <div className="flex items-start gap-3">
+                    <div
+                      className="w-11 h-11 rounded-xl flex items-center justify-center text-xl shrink-0"
+                      style={{ background: "rgba(212,175,55,0.2)" }}
+                    >
+                      {plan.emoji}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div
+                        className="font-display font-black text-xs uppercase tracking-widest mb-0.5"
+                        style={{ color: "rgba(212,175,55,0.6)" }}
+                      >
+                        {plan.day}
+                      </div>
+                      <h2
+                        className="font-display font-black text-sm leading-tight mb-0.5"
+                        style={{ color: "#D4AF37" }}
+                      >
+                        {plan.title}
+                      </h2>
+                      <p className="text-white/40 text-xs font-body leading-snug">
+                        {plan.description}
+                      </p>
+                      <div className="flex items-center gap-2 mt-2 flex-wrap">
+                        <span className="text-white/30 text-xs font-body">
+                          {plan.exercises.length} exercises
+                        </span>
+                        <span className="text-white/20 text-xs">•</span>
+                        <span className="text-white/30 text-xs font-body">
+                          ~{estimateMinutes(plan.exercises)} min
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <Button
+                    data-ocid={`workout.plan.start_button.${index + 1}`}
+                    onClick={() => handleStartWorkout(plan)}
+                    className="w-full mt-3 h-11 font-display font-black text-sm rounded-xl"
+                    style={{ background: "#D4AF37", color: "#1F1F1F" }}
+                  >
+                    Start Workout ▶
+                  </Button>
+                </motion.div>
+              ))}
           </motion.div>
         )}
 
