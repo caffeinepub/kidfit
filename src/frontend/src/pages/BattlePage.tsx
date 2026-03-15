@@ -8,6 +8,8 @@ import {
   Copy,
   Loader2,
   MessageSquare,
+  Mic,
+  MicOff,
   RefreshCw,
   RotateCcw,
   Send,
@@ -223,6 +225,8 @@ export default function BattlePage() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const chatScrollRef = useRef<HTMLDivElement>(null);
+  const micStreamRef = useRef<MediaStream | null>(null);
+  const [isMuted, setIsMuted] = useState(true);
 
   const createBattle = useCreateBattle();
   const joinBattle = useJoinBattle();
@@ -347,6 +351,45 @@ export default function BattlePage() {
       if (scoreIntervalRef.current) clearInterval(scoreIntervalRef.current);
     };
   }, [battleState, battleCode]);
+
+  // ── Mic management ──────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (battleState !== "active") {
+      if (micStreamRef.current) {
+        for (const t of micStreamRef.current.getTracks()) {
+          t.stop();
+        }
+        micStreamRef.current = null;
+      }
+      return;
+    }
+    navigator.mediaDevices
+      .getUserMedia({ audio: true, video: false })
+      .then((stream) => {
+        micStreamRef.current = stream;
+        for (const t of stream.getAudioTracks()) {
+          t.enabled = false;
+        }
+      })
+      .catch(() => {
+        /* mic permission denied – fail silently */
+      });
+    return () => {
+      if (micStreamRef.current) {
+        for (const t of micStreamRef.current.getTracks()) {
+          t.stop();
+        }
+        micStreamRef.current = null;
+      }
+    };
+  }, [battleState]);
+
+  useEffect(() => {
+    if (!micStreamRef.current) return;
+    for (const t of micStreamRef.current.getAudioTracks()) {
+      t.enabled = !isMuted;
+    }
+  }, [isMuted]);
 
   const detectLoop = useCallback(() => {
     const video = videoRef.current;
@@ -515,6 +558,12 @@ export default function BattlePage() {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     if (scoreIntervalRef.current) clearInterval(scoreIntervalRef.current);
     stopCamera();
+    if (micStreamRef.current) {
+      for (const t of micStreamRef.current.getTracks()) {
+        t.stop();
+      }
+      micStreamRef.current = null;
+    }
 
     updateScoreMutateRef.current({ code, score: BigInt(countRef.current) });
 
@@ -922,6 +971,41 @@ export default function BattlePage() {
                   <CheckCircle className="w-5 h-5 mr-2" />
                   Submit Score ({count} reps)
                 </Button>
+              </div>
+
+              {/* Mic Toggle */}
+              <div className="flex justify-center">
+                <button
+                  type="button"
+                  data-ocid="battle.mic.toggle"
+                  onClick={() => setIsMuted((m) => !m)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-full text-xs font-display font-bold transition-all duration-200"
+                  style={
+                    isMuted
+                      ? {
+                          background: "rgba(255,255,255,0.07)",
+                          border: "1px solid rgba(255,255,255,0.15)",
+                          color: "rgba(255,255,255,0.5)",
+                        }
+                      : {
+                          background: "rgba(212,175,55,0.2)",
+                          border: "1px solid rgba(212,175,55,0.5)",
+                          color: "#D4AF37",
+                        }
+                  }
+                >
+                  {isMuted ? (
+                    <>
+                      <MicOff className="w-4 h-4" />
+                      Mic Off
+                    </>
+                  ) : (
+                    <>
+                      <Mic className="w-4 h-4" />
+                      Mic On
+                    </>
+                  )}
+                </button>
               </div>
 
               {/* ===== CHAT PANEL ===== */}

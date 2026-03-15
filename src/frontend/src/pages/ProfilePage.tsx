@@ -1,29 +1,25 @@
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useQueryClient } from "@tanstack/react-query";
 import {
   Award,
   Calendar,
   Eye,
   EyeOff,
   LogOut,
-  Settings,
   Shield,
   Star,
   Zap,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
-import { toast } from "sonner";
-import { Tier, UserRole } from "../backend.d";
+import { Tier } from "../backend.d";
 import RewardedAdModal from "../components/RewardedAdModal";
 import TierBadge from "../components/TierBadge";
-import { useActor } from "../hooks/useActor";
 import { useAdUnlock } from "../hooks/useAdUnlock";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import { usePushUpStats } from "../hooks/usePushUpStats";
-import { useUserProfile, useUserRole } from "../hooks/useQueries";
+import { useUserProfile } from "../hooks/useQueries";
 import {
   TIERS,
   getTierFromXp,
@@ -32,7 +28,6 @@ import {
   getXpToNextTier,
   levelFromXp,
 } from "../lib/xp";
-import { getSecretParameter } from "../utils/urlParams";
 
 type Page =
   | "home"
@@ -48,46 +43,14 @@ interface ProfilePageProps {
   onNavigate?: (page: Page) => void;
 }
 
-export default function ProfilePage({ onNavigate }: ProfilePageProps) {
+export default function ProfilePage({
+  onNavigate: _onNavigate,
+}: ProfilePageProps) {
   const { isUnlocked: profileUnlocked, unlock: unlockProfile } = useAdUnlock();
   const [adModalOpen, setAdModalOpen] = useState(false);
   const { data: profile, isLoading } = useUserProfile();
   const { clear, identity } = useInternetIdentity();
-  const { data: roleData } = useUserRole();
   const { stats } = usePushUpStats();
-  const isAdmin = roleData === UserRole.admin;
-  const [claiming, setClaiming] = useState(false);
-  const { actor } = useActor();
-  const queryClient = useQueryClient();
-
-  const handleClaimAdmin = async () => {
-    const token = getSecretParameter("caffeineAdminToken") || "";
-    if (!token) {
-      toast.error(
-        "Admin token not found in URL. Open the app with the admin link.",
-      );
-      return;
-    }
-    if (!actor) {
-      toast.error("Not connected yet, please wait.");
-      return;
-    }
-    setClaiming(true);
-    try {
-      await actor.claimAdminRole(token);
-      await queryClient.invalidateQueries({ queryKey: ["userRole"] });
-      toast.success("You are now admin!");
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      toast.error(
-        msg.includes("Invalid")
-          ? "Wrong admin token."
-          : "Failed to claim admin.",
-      );
-    } finally {
-      setClaiming(false);
-    }
-  };
 
   const handleViewProfile = () => {
     setAdModalOpen(true);
@@ -141,31 +104,6 @@ export default function ProfilePage({ onNavigate }: ProfilePageProps) {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {isAdmin && (
-            <Button
-              data-ocid="profile.admin.button"
-              variant="outline"
-              size="sm"
-              onClick={() => onNavigate?.("admin")}
-              className="border-chart-4/40 text-chart-4 hover:text-chart-4 font-body gap-1"
-            >
-              <Settings className="w-3 h-3" />
-              Admin
-            </Button>
-          )}
-          {!isAdmin && (
-            <Button
-              data-ocid="profile.claim_admin.button"
-              variant="outline"
-              size="sm"
-              onClick={handleClaimAdmin}
-              disabled={claiming}
-              className="border-yellow-500/40 text-yellow-400 hover:text-yellow-300 font-body gap-1"
-            >
-              <Shield className="w-3 h-3" />
-              {claiming ? "Claiming..." : "Claim Admin"}
-            </Button>
-          )}
           {identity && (
             <Button
               variant="outline"

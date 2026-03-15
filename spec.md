@@ -1,44 +1,38 @@
-# KidFit
+# TeenTuffLifts
 
 ## Current State
-New project. No existing code.
+- Train section has 4 hardcoded workout plans (Tue–Fri) shown as flat cards
+- Battle page has push-up counter, rep sync, and chat — no mic feature
+- No fat loss plan, no yoga plan
+- No categorization of Train content
 
 ## Requested Changes (Diff)
 
 ### Add
-- User authentication (login/signup with username and profile)
-- XP and leveling system: users earn XP per workout session completed; levels progress through tiers (Bronze, Silver, Gold, Platinum, Diamond)
-- Exercise library: empty placeholder sections for the owner to fill in later (bodyweight exercises, no gym equipment)
-- Push-up counter: uses device camera to detect push-up motion automatically and count reps; completed sessions award XP
-- Ad system: each user sees up to 6 ads per day, 1 ad per 30-minute interval; ads are placeholder banners; users with active ad-free rewards skip ads
-- Free push-up tournaments: free to enter, push-up count tracked, winner earns XP bonus
-- Paid tournaments: held every 2 months, entry fee 50 rupees via Stripe; 1st place gets 3 months ad-free, 2nd gets 2 months, 3rd gets 1 month ad-free
-- Tournament leaderboard showing rankings and results
-- Ad-free reward tracking per user (expiry date stored, checked on each session)
+- Mic feature in battles: both players can mute/unmute themselves (no admin control). Uses Web Audio API / getUserMedia with a mute toggle button shown during active battle.
+- Fat Loss Workout plan for teens (warm-up, HIIT-style exercises, cool-down stretching)
+- Yoga plan (series of yoga poses with auto-timer, all timed holds)
+- Train section tabs: "Home Workout", "Gym Goers", "Fat Loss", "Yoga"
+- Gym Goers Workouts category with gym-adapted versions of existing plans
 
 ### Modify
-- Nothing (new project)
+- ExercisesPage.tsx: add tab navigation at top (Home Workout / Gym Goers / Fat Loss / Yoga), existing Tue–Fri plans go under Home Workout, new plans distributed across categories
+- BattlePage.tsx: add mic toggle button in active battle state; request mic via getUserMedia, allow mute/unmute, show mic status indicator
 
 ### Remove
-- Nothing (new project)
+- Nothing removed
 
 ## Implementation Plan
-1. Backend (Motoko):
-   - User profiles: username, XP, level, tier, adFreeUntil (timestamp)
-   - XP system: addXP(userId, amount), getLevelFromXP(xp) -> tier/level
-   - Ad tracking: recordAdView(userId), canShowAd(userId) -> bool (max 6/day, 1 per 30 min), isAdFree(userId) -> bool
-   - Exercise library: placeholder structure for exercise categories and items (owner fills in)
-   - Workout sessions: logSession(userId, exerciseId, reps) -> XP earned
-   - Push-up sessions: logPushUpSession(userId, count) -> XP earned
-   - Free tournaments: createFreeTournament, enterFreeTournament(userId), submitScore(userId, tournamentId, count), getLeaderboard(tournamentId), finalizeTournament(tournamentId) -> award XP to winner
-   - Paid tournaments: createPaidTournament, enterPaidTournament(userId, paymentIntentId), submitScore, finalizePaidTournament -> grant adFreeReward to top 3
-   - Stripe: payment intent creation for 50 rupees (INR) tournament entry
-
-2. Frontend:
-   - Home/dashboard: user stats (XP, level, tier, streak), daily ad counter
-   - Exercise library page: categorized list (empty, ready to fill)
-   - Push-up counter page: camera feed with motion detection using PoseNet or similar, live rep counter, session complete button
-   - Tournaments page: list of active free and paid tournaments, enter button, leaderboard view
-   - Profile page: XP progress bar, tier badge, ad-free status
-   - Ad banner component: shown at timed intervals (every 30 min, max 6/day), hidden for ad-free users
-   - Stripe checkout flow for paid tournament entry
+1. Update ExercisesPage.tsx:
+   - Add tab UI at top with 4 categories
+   - Existing 4 plans (Tue–Fri) → Home Workout tab
+   - Create Gym Goers plans (Chest Day, Back Day, Leg Day using gym equipment)
+   - Create Fat Loss plan (Jumping Jacks, Burpees, High Knees, Mountain Climbers, Jump Squats, Push-Ups, Plank, cool-down)
+   - Create Yoga plan (Tadasana, Downward Dog, Warrior I & II, Tree Pose, Child's Pose, Cobra, Cat Cow, Savasana — all timed)
+   - Yoga tab shows only Yoga plan; Fat Loss tab shows fat loss plan; Gym Goers shows gym plans
+2. Update BattlePage.tsx:
+   - On battle start, request mic access via getUserMedia (audio only)
+   - Store mic stream in ref; add isMuted state (default muted)
+   - Add mic toggle button in active battle UI (microphone/mute icon)
+   - When muted: disable audio tracks; when unmuted: enable audio tracks
+   - Show current mic status (muted/live) as a small indicator
