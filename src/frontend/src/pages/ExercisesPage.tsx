@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useMutation } from "@tanstack/react-query";
 import {
   ArrowLeft,
   ChevronRight,
@@ -23,6 +24,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Difficulty } from "../backend.d";
 import type { Exercise } from "../backend.d";
+import { useActor } from "../hooks/useActor";
 import {
   useCategories,
   useExercisesByCategory,
@@ -119,6 +121,71 @@ function getExerciseImage(name: string): string | null {
     return "/assets/generated/exercise-seated-forward-bend.dim_400x400.jpg";
   if (n.includes("savasana") || n.includes("corpse pose"))
     return "/assets/generated/exercise-savasana.dim_400x400.jpg";
+  if (n.includes("barbell bench press"))
+    return "/assets/generated/exercise-barbell-bench-press.dim_400x400.jpg";
+  if (n.includes("incline dumbbell press") || n.includes("incline db press"))
+    return "/assets/generated/exercise-incline-db-press.dim_400x400.jpg";
+  if (n.includes("cable fly"))
+    return "/assets/generated/exercise-cable-fly.dim_400x400.jpg";
+  if (n.includes("dips") && !n.includes("chair"))
+    return "/assets/generated/exercise-dips.dim_400x400.jpg";
+  if (n.includes("barbell curl"))
+    return "/assets/generated/exercise-barbell-curl.dim_400x400.jpg";
+  if (n.includes("incline dumbbell curl") || n.includes("incline db curl"))
+    return "/assets/generated/exercise-incline-db-curl.dim_400x400.jpg";
+  if (n.includes("close-grip bench") || n.includes("close grip bench"))
+    return "/assets/generated/exercise-close-grip-bench.dim_400x400.jpg";
+  if (n.includes("tricep rope") || n.includes("rope pushdown"))
+    return "/assets/generated/exercise-tricep-rope-pushdown.dim_400x400.jpg";
+  if (
+    n.includes("deadlift") &&
+    !n.includes("romanian") &&
+    !n.includes("single dumbbell")
+  )
+    return "/assets/generated/exercise-deadlift.dim_400x400.jpg";
+  if (n.includes("pull-up") || n.includes("pull up") || n.includes("pullup"))
+    return "/assets/generated/exercise-pullups.dim_400x400.jpg";
+  if (n.includes("barbell row"))
+    return "/assets/generated/exercise-barbell-rows.dim_400x400.jpg";
+  if (n.includes("seated cable row"))
+    return "/assets/generated/exercise-seated-cable-row.dim_400x400.jpg";
+  if (n.includes("overhead barbell press"))
+    return "/assets/generated/exercise-overhead-barbell-press.dim_400x400.jpg";
+  if (n.includes("face pull"))
+    return "/assets/generated/exercise-face-pulls.dim_400x400.jpg";
+  if (n.includes("hanging leg raise"))
+    return "/assets/generated/exercise-hanging-leg-raises.dim_400x400.jpg";
+  if (n.includes("cable crunch"))
+    return "/assets/generated/exercise-cable-crunch.dim_400x400.jpg";
+  if (n.includes("decline sit"))
+    return "/assets/generated/exercise-decline-situps.dim_400x400.jpg";
+  if (n.includes("plank") && !n.includes("side") && !n.includes("hold"))
+    return "/assets/generated/exercise-plank.dim_400x400.jpg";
+  if (n.includes("standing calf raise"))
+    return "/assets/generated/exercise-standing-calf-raises.dim_400x400.jpg";
+  if (n.includes("seated calf raise"))
+    return "/assets/generated/exercise-seated-calf-raises.dim_400x400.jpg";
+  if (n.includes("donkey calf raise"))
+    return "/assets/generated/exercise-donkey-calf-raises.dim_400x400.jpg";
+  if (n.includes("hip thrust"))
+    return "/assets/generated/exercise-barbell-hip-thrust.dim_400x400.jpg";
+  if (
+    n.includes("bulgarian split squat") ||
+    (n.includes("bulgarian") && n.includes("split"))
+  )
+    return "/assets/generated/exercise-bulgarian-split-squat.dim_400x400.jpg";
+  if (n.includes("glute bridge"))
+    return "/assets/generated/exercise-glute-bridge.dim_400x400.jpg";
+  if (n.includes("cable kickback"))
+    return "/assets/generated/exercise-cable-kickbacks.dim_400x400.jpg";
+  if (n.includes("back extension"))
+    return "/assets/generated/exercise-back-extensions.dim_400x400.jpg";
+  if (n.includes("good morning"))
+    return "/assets/generated/exercise-good-mornings.dim_400x400.jpg";
+  if (n.includes("arm circle"))
+    return "/assets/generated/exercise-arm-circles.dim_400x400.jpg";
+  if (n.includes("hammer curl"))
+    return "/assets/generated/exercise-hammer-curls-alt.dim_400x400.jpg";
   return null;
 }
 
@@ -306,183 +373,132 @@ const WORKOUT_PLANS: WorkoutPlan[] = [
 
 const GYM_PLANS: WorkoutPlan[] = [
   {
-    id: "gym-chest-biceps-triceps",
+    id: "gym-chest-biceps-triceps-v2",
     title: "CHEST, BICEPS & TRICEPS – GYM",
     day: "Tuesday – Gym",
     emoji: "💪",
     description:
-      "Same movements, heavier load. Use gym equipment for maximum gains.",
-    category: "gym",
+      "Gym-specific movements for maximum chest, biceps, and triceps gains.",
+    category: "gym" as WorkoutCategory,
     exercises: [
       { name: "Jumping Jacks", type: "WARMUP", duration: 60 },
+      { name: "Arm Circles", type: "WARMUP", duration: 30 },
+      { name: "High Knees", type: "WARMUP", duration: 30 },
       {
-        name: "Declined Push Ups",
+        name: "Barbell Bench Press",
         type: "STRENGTH",
         sets: 2,
         reps: "8–10 reps",
-        note: "More weight, less reps and sets",
       },
       {
-        name: "Push Ups",
+        name: "Incline Dumbbell Press",
         type: "STRENGTH",
         sets: 2,
         reps: "8–10 reps",
-        note: "More weight, less reps and sets",
       },
+      { name: "Cable Fly", type: "STRENGTH", sets: 2, reps: "8–10 reps" },
+      { name: "Dips", type: "STRENGTH", sets: 2, reps: "8–10 reps" },
+      { name: "Barbell Curl", type: "STRENGTH", sets: 2, reps: "8–10 reps" },
       {
-        name: "Inclined Push Ups",
+        name: "Incline Dumbbell Curl",
         type: "STRENGTH",
         sets: 2,
         reps: "8–10 reps",
-        note: "More weight, less reps and sets",
       },
+      { name: "Hammer Curl", type: "STRENGTH", sets: 2, reps: "8–10 reps" },
       {
-        name: "Alternate Curls",
+        name: "Close-Grip Bench Press",
         type: "STRENGTH",
         sets: 2,
         reps: "8–10 reps",
-        note: "More weight, less reps and sets",
       },
       {
-        name: "Hammer Curls (Alternating)",
+        name: "Tricep Rope Pushdown",
         type: "STRENGTH",
         sets: 2,
         reps: "8–10 reps",
-        note: "More weight, less reps and sets",
       },
-      {
-        name: "Bicep Curls (Both Hands)",
-        type: "STRENGTH",
-        sets: 2,
-        reps: "8–10 reps",
-        note: "More weight, less reps and sets",
-      },
-      {
-        name: "Hammer Curls (Both Hands)",
-        type: "STRENGTH",
-        sets: 2,
-        reps: "8–10 reps",
-        note: "More weight, less reps and sets",
-      },
-      {
-        name: "Chair Dips",
-        type: "STRENGTH",
-        sets: 2,
-        reps: "8–10 reps",
-        note: "More weight, less reps and sets",
-      },
-      {
-        name: "Overhead Skull Crushers",
-        type: "STRENGTH",
-        sets: 2,
-        reps: "8–10 reps",
-        note: "More weight, less reps and sets",
-      },
+      { name: "Skull Crushers", type: "STRENGTH", sets: 2, reps: "8–10 reps" },
       { name: "Cobra Pose", type: "STRETCH", duration: 30 },
       { name: "Cat Cow Pose", type: "STRETCH", duration: 30 },
       { name: "Tadasana (Mountain Pose)", type: "STRETCH", duration: 30 },
     ],
   },
   {
-    id: "gym-abs",
-    title: "ABS WORKOUT – GYM",
-    day: "Wednesday – Gym",
-    emoji: "🔥",
-    description:
-      "Core-focused training with heavier resistance for maximum abs definition.",
-    category: "gym",
-    exercises: [
-      { name: "Jumping Jacks", type: "WARMUP", duration: 60 },
-      {
-        name: "Crucifix Crunches",
-        type: "STRENGTH",
-        sets: 2,
-        reps: "8–10 reps",
-        note: "More weight, less reps and sets",
-      },
-      {
-        name: "Hollow Body Hold",
-        type: "STRENGTH",
-        sets: 2,
-        reps: "8–10 reps",
-        note: "More weight, less reps and sets",
-      },
-      {
-        name: "Leg Raises",
-        type: "STRENGTH",
-        sets: 2,
-        reps: "8–10 reps",
-        note: "More weight, less reps and sets",
-      },
-      {
-        name: "Side Plank Raises (Left Side)",
-        type: "STRENGTH",
-        sets: 2,
-        reps: "8–10 reps",
-        note: "More weight, less reps and sets",
-      },
-      {
-        name: "Side Plank Raises (Right Side)",
-        type: "STRENGTH",
-        sets: 2,
-        reps: "8–10 reps",
-        note: "More weight, less reps and sets",
-      },
-      { name: "Cobra Pose", type: "STRETCH", duration: 30 },
-      { name: "Cat Cow Pose", type: "STRETCH", duration: 30 },
-      { name: "Tadasana (Mountain Pose)", type: "STRETCH", duration: 30 },
-    ],
-  },
-  {
-    id: "gym-back-shoulders",
+    id: "gym-back-shoulders-v2",
     title: "BACK & SHOULDERS – GYM",
-    day: "Thursday – Gym",
+    day: "Wednesday – Gym",
     emoji: "🏋️",
-    description: "Pull heavy for a wider back and stronger shoulders.",
-    category: "gym",
+    description: "Pull heavy for a wider back and broader shoulders.",
+    category: "gym" as WorkoutCategory,
     exercises: [
       { name: "Jumping Jacks", type: "WARMUP", duration: 60 },
+      { name: "Arm Circles", type: "WARMUP", duration: 30 },
+      { name: "High Knees", type: "WARMUP", duration: 30 },
+      { name: "Deadlift", type: "STRENGTH", sets: 2, reps: "8–10 reps" },
+      { name: "Pull-Ups", type: "STRENGTH", sets: 2, reps: "8–10 reps" },
+      { name: "Barbell Rows", type: "STRENGTH", sets: 2, reps: "8–10 reps" },
       {
-        name: "Leaning Back Rows",
+        name: "Seated Cable Row",
         type: "STRENGTH",
         sets: 2,
         reps: "8–10 reps",
-        note: "More weight, less reps and sets",
       },
       {
-        name: "Single Dumbbell Low Back Rows",
+        name: "Overhead Barbell Press",
         type: "STRENGTH",
         sets: 2,
         reps: "8–10 reps",
-        note: "More weight, less reps and sets",
       },
       {
-        name: "Leaning Rear Flyes",
+        name: "Dumbbell Lateral Raises",
         type: "STRENGTH",
         sets: 2,
         reps: "8–10 reps",
-        note: "More weight, less reps and sets",
+      },
+      { name: "Rear Delt Fly", type: "STRENGTH", sets: 2, reps: "8–10 reps" },
+      { name: "Face Pulls", type: "STRENGTH", sets: 2, reps: "8–10 reps" },
+      { name: "Cobra Pose", type: "STRETCH", duration: 30 },
+      { name: "Cat Cow Pose", type: "STRETCH", duration: 30 },
+      { name: "Tadasana (Mountain Pose)", type: "STRETCH", duration: 30 },
+    ],
+  },
+  {
+    id: "gym-abs-calves-v2",
+    title: "ABS & CALVES – GYM",
+    day: "Friday – Gym",
+    emoji: "🔥",
+    description: "Core and calf definition with gym equipment.",
+    category: "gym" as WorkoutCategory,
+    exercises: [
+      { name: "Jumping Jacks", type: "WARMUP", duration: 60 },
+      { name: "High Knees", type: "WARMUP", duration: 30 },
+      {
+        name: "Hanging Leg Raises",
+        type: "STRENGTH",
+        sets: 2,
+        reps: "8–10 reps",
+      },
+      { name: "Cable Crunch", type: "STRENGTH", sets: 2, reps: "8–10 reps" },
+      { name: "Decline Sit-ups", type: "STRENGTH", sets: 2, reps: "8–10 reps" },
+      { name: "Plank", type: "WARMUP", duration: 60 },
+      {
+        name: "Standing Calf Raises",
+        type: "STRENGTH",
+        sets: 2,
+        reps: "8–10 reps",
       },
       {
-        name: "Alternative Rear Delt Flyes",
+        name: "Seated Calf Raises",
         type: "STRENGTH",
         sets: 2,
         reps: "8–10 reps",
-        note: "More weight, less reps and sets",
       },
       {
-        name: "Front Raises",
+        name: "Donkey Calf Raises",
         type: "STRENGTH",
         sets: 2,
         reps: "8–10 reps",
-        note: "More weight, less reps and sets",
-      },
-      {
-        name: "Lateral Raises",
-        type: "STRENGTH",
-        sets: 2,
-        reps: "8–10 reps",
-        note: "More weight, less reps and sets",
       },
       { name: "Cobra Pose", type: "STRETCH", duration: 30 },
       { name: "Cat Cow Pose", type: "STRETCH", duration: 30 },
@@ -490,63 +506,60 @@ const GYM_PLANS: WorkoutPlan[] = [
     ],
   },
   {
-    id: "gym-legs",
-    title: "LEGS – GYM",
-    day: "Friday – Gym",
+    id: "gym-glutes-lower-back-v2",
+    title: "GLUTES & LOWER BACK – GYM",
+    day: "Saturday – Gym",
     emoji: "🦵",
-    description: "Heavier loads for stronger legs. Focus on form first.",
-    category: "gym",
+    description: "Build powerful glutes and a strong lower back.",
+    category: "gym" as WorkoutCategory,
     exercises: [
       { name: "Jumping Jacks", type: "WARMUP", duration: 60 },
+      { name: "High Knees", type: "WARMUP", duration: 30 },
       {
-        name: "Goblet Squats",
+        name: "Barbell Hip Thrust",
         type: "STRENGTH",
         sets: 2,
         reps: "8–10 reps",
-        note: "More weight, less reps and sets",
       },
       {
-        name: "Sumo Squats",
+        name: "Bulgarian Split Squat (Left Leg)",
         type: "STRENGTH",
         sets: 2,
         reps: "8–10 reps",
-        note: "More weight, less reps and sets",
       },
       {
-        name: "Calf Raises",
+        name: "Bulgarian Split Squat (Right Leg)",
         type: "STRENGTH",
         sets: 2,
         reps: "8–10 reps",
-        note: "More weight, less reps and sets",
       },
+      { name: "Glute Bridge", type: "STRENGTH", sets: 2, reps: "8–10 reps" },
       {
-        name: "Bulgarian Squats (Left Leg)",
+        name: "Cable Kickbacks (Left Leg)",
         type: "STRENGTH",
         sets: 2,
         reps: "8–10 reps",
-        note: "More weight, less reps and sets",
       },
       {
-        name: "Bulgarian Squats (Right Leg)",
+        name: "Cable Kickbacks (Right Leg)",
         type: "STRENGTH",
         sets: 2,
         reps: "8–10 reps",
-        note: "More weight, less reps and sets",
       },
       {
-        name: "Single Dumbbell Romanian Deadlifts",
+        name: "Romanian Deadlift",
         type: "STRENGTH",
         sets: 2,
         reps: "8–10 reps",
-        note: "More weight, less reps and sets",
       },
+      { name: "Back Extensions", type: "STRENGTH", sets: 2, reps: "8–10 reps" },
+      { name: "Good Mornings", type: "STRENGTH", sets: 2, reps: "8–10 reps" },
       { name: "Cobra Pose", type: "STRETCH", duration: 30 },
       { name: "Cat Cow Pose", type: "STRETCH", duration: 30 },
       { name: "Tadasana (Mountain Pose)", type: "STRETCH", duration: 30 },
     ],
   },
 ];
-
 const FAT_LOSS_PLANS: WorkoutPlan[] = [
   {
     id: "fatloss-teens",
@@ -717,6 +730,8 @@ function WorkoutOverlay({
 
   const [stepIndex, setStepIndex] = useState(0);
   const [, setTimerKey] = useState(0);
+  const [restActive, setRestActive] = useState(false);
+  const [restSecondsLeft, setRestSecondsLeft] = useState(30);
 
   const step = steps[stepIndex];
   const isLastStep = stepIndex === steps.length - 1;
@@ -728,15 +743,89 @@ function WorkoutOverlay({
     ((currentExerciseIdx + 1) / totalExercises) * 100,
   );
 
+  const { actor } = useActor();
+  const [rewardModal, setRewardModal] = useState(false);
+  const [reward, setReward] = useState<{ xp: number; coins: number } | null>(
+    null,
+  );
+  const [bonusAdCountdown, setBonusAdCountdown] = useState<number | null>(null);
+  const [bonusClaimed, setBonusClaimed] = useState(false);
+
+  const completeWorkoutMutation = useMutation({
+    mutationFn: async () => {
+      if (!actor) return { xpGained: BigInt(50), coinsGained: BigInt(10) };
+      const b = actor as unknown as {
+        completeWorkout(): Promise<{ xpGained: bigint; coinsGained: bigint }>;
+      };
+      return b.completeWorkout();
+    },
+    onSuccess: (data) => {
+      setReward({ xp: Number(data.xpGained), coins: Number(data.coinsGained) });
+      setRewardModal(true);
+    },
+    onError: () => {
+      toast.success("💪 Workout complete! Great job!");
+      onClose();
+    },
+  });
+
+  const addBonusMutation = useMutation({
+    mutationFn: async () => {
+      if (!actor) return BigInt(0);
+      const b = actor as unknown as {
+        addBonusCoins(n: bigint): Promise<bigint>;
+      };
+      return b.addBonusCoins(BigInt(1));
+    },
+    onSuccess: () => {
+      setBonusClaimed(true);
+      toast.success("+1 bonus coin earned! 🪙");
+    },
+  });
+
+  const startBonusAd = () => {
+    setBonusAdCountdown(5);
+  };
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: addBonusMutation stable
+  useEffect(() => {
+    if (bonusAdCountdown === null) return;
+    if (bonusAdCountdown <= 0) {
+      setBonusAdCountdown(null);
+      addBonusMutation.mutate();
+      return;
+    }
+    const id = setTimeout(() => setBonusAdCountdown((n) => (n ?? 1) - 1), 1000);
+    return () => clearTimeout(id);
+  }, [bonusAdCountdown]);
+
   const advance = useCallback(() => {
     if (stepIndex < steps.length - 1) {
       setStepIndex((i) => i + 1);
       setTimerKey((k) => k + 1);
     } else {
-      toast.success("💪 Workout complete! Great job!");
-      onClose();
+      completeWorkoutMutation.mutate();
     }
-  }, [stepIndex, steps.length, onClose]);
+  }, [stepIndex, steps.length, completeWorkoutMutation]);
+
+  // Reset optional rest when step changes
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional reset on stepIndex change
+  useEffect(() => {
+    setRestActive(false);
+    setRestSecondsLeft(30);
+  }, [stepIndex]);
+
+  // Optional rest countdown
+  useEffect(() => {
+    if (!restActive) return;
+    if (restSecondsLeft <= 0) {
+      setRestActive(false);
+      setRestSecondsLeft(30);
+      return;
+    }
+    const id = setTimeout(() => setRestSecondsLeft((s) => s - 1), 1000);
+    return () => clearTimeout(id);
+  }, [restActive, restSecondsLeft]);
 
   // Determine timer params
   const isAutoTimer = step.kind === "timed" || step.kind === "rest";
@@ -751,176 +840,365 @@ function WorkoutOverlay({
   const fill = isAutoTimer ? (seconds / timerDuration) * circ : circ;
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex flex-col"
-      style={{ background: "#1F1F1F" }}
-      data-ocid="workout.progress_panel"
-    >
-      {/* Progress bar */}
-      <div className="h-1 w-full bg-white/10">
-        <motion.div
-          className="h-full"
-          style={{ background: "#D4AF37" }}
-          initial={{ width: 0 }}
-          animate={{ width: `${progressPct}%` }}
-          transition={{ duration: 0.5 }}
-        />
-      </div>
-
-      {/* Top bar */}
-      <div className="flex items-center justify-between px-5 pt-4 pb-2">
-        <span className="text-white/50 text-sm font-body">
-          Exercise {currentExerciseIdx + 1} of {totalExercises}
-        </span>
-        <button
-          type="button"
-          data-ocid="workout.close_button"
-          onClick={onClose}
-          className="w-9 h-9 rounded-full flex items-center justify-center"
-          style={{ background: "rgba(255,255,255,0.08)" }}
+    <>
+      {/* Workout Completion Reward Modal */}
+      {rewardModal && reward && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center"
+          style={{ background: "rgba(0,0,0,0.85)" }}
         >
-          <X className="w-5 h-5 text-white" />
-        </button>
-      </div>
-
-      {/* Main content */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6 gap-6">
-        <AnimatePresence mode="wait">
           <motion.div
-            key={stepIndex}
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -24 }}
-            transition={{ duration: 0.3 }}
-            className="flex flex-col items-center gap-6 w-full max-w-sm"
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="mx-4 rounded-3xl p-7 text-center space-y-4 max-w-sm w-full"
+            style={{ background: "#1F1F1F", border: "2px solid #D4AF37" }}
           >
-            {/* REST step */}
-            {step.kind === "rest" && (
-              <>
-                <span
-                  className="text-3xl font-display font-black tracking-widest"
+            <div className="text-5xl">🏆</div>
+            <h2 className="font-display font-black text-2xl text-white">
+              Workout Complete!
+            </h2>
+            <div className="flex justify-center gap-6 py-2">
+              <div className="text-center">
+                <div
+                  className="font-display font-black text-3xl"
                   style={{ color: "#D4AF37" }}
                 >
-                  REST
-                </span>
-                <CircleTimer seconds={seconds} R={R} circ={circ} fill={fill} />
-                <p className="text-white/40 text-sm font-body">
-                  {step.afterSetNum === 0
-                    ? "Next exercise coming up..."
-                    : "Next set coming up..."}
-                </p>
-                <button
-                  type="button"
-                  data-ocid="workout.skip_rest_button"
-                  onClick={advance}
-                  className="text-white/40 text-sm underline font-body"
-                >
-                  Skip Rest
-                </button>
-              </>
-            )}
-
-            {/* TIMED step (warmup/stretch) */}
-            {step.kind === "timed" && (
-              <>
-                <TypeBadge type={step.exercise.type} />
-                {getExerciseImage(step.exercise.name) && (
-                  <img
-                    src={getExerciseImage(step.exercise.name) ?? ""}
-                    alt={step.exercise.name}
-                    className="w-48 h-48 rounded-2xl object-cover mx-auto"
-                    style={{ border: "1px solid rgba(212,175,55,0.35)" }}
-                  />
-                )}
-                <h2 className="text-white font-display font-black text-3xl text-center leading-tight">
-                  {step.exercise.name}
-                </h2>
-                <CircleTimer seconds={seconds} R={R} circ={circ} fill={fill} />
-                <p className="text-white/40 text-sm font-body">
-                  Auto-advancing when done
-                </p>
-              </>
-            )}
-
-            {/* STRENGTH step */}
-            {step.kind === "strength" && (
-              <>
-                <TypeBadge type="STRENGTH" />
-                {getExerciseImage(step.exercise.name) && (
-                  <img
-                    src={getExerciseImage(step.exercise.name) ?? ""}
-                    alt={step.exercise.name}
-                    className="w-48 h-48 rounded-2xl object-cover mx-auto"
-                    style={{ border: "1px solid rgba(212,175,55,0.35)" }}
-                  />
-                )}
-                <h2 className="text-white font-display font-black text-3xl text-center leading-tight">
-                  {step.exercise.name}
-                </h2>
-                <div
-                  className="rounded-2xl px-8 py-5 text-center"
-                  style={{
-                    background: "rgba(212,175,55,0.1)",
-                    border: "1px solid rgba(212,175,55,0.3)",
-                  }}
-                >
-                  <div
-                    className="text-5xl font-display font-black mb-1"
-                    style={{ color: "#D4AF37" }}
-                  >
-                    {step.exercise.reps}
-                  </div>
-                  <div className="text-white/50 text-sm font-body">
-                    Set {step.setNum} of {step.totalSets}
-                  </div>
+                  +{reward.xp}
                 </div>
-                {step.exercise.note ? (
-                  <p className="text-amber-400/60 text-xs font-body text-center font-semibold">
-                    💡 {step.exercise.note}
-                  </p>
-                ) : (
-                  <p className="text-white/30 text-xs font-body text-center">
-                    Use bags or household items instead of dumbbells
-                  </p>
-                )}
-                <Button
-                  data-ocid="workout.next_button"
-                  onClick={advance}
-                  className="w-full h-14 text-base font-display font-black rounded-2xl"
-                  style={{ background: "#D4AF37", color: "#1F1F1F" }}
+                <div className="text-xs text-white/50 font-body">XP</div>
+              </div>
+              <div className="text-center">
+                <div
+                  className="font-display font-black text-3xl"
+                  style={{ color: "#D4AF37" }}
                 >
-                  {isLastStep
-                    ? "Finish Workout 🏁"
-                    : step.setNum < step.totalSets
-                      ? "Done ✓  Next Set"
-                      : "Done ✓  Next Exercise"}
-                </Button>
-              </>
+                  +{reward.coins}
+                </div>
+                <div className="text-xs text-white/50 font-body">Coins 🪙</div>
+              </div>
+            </div>
+            {!bonusClaimed && bonusAdCountdown === null && (
+              <button
+                type="button"
+                data-ocid="workout.watch_bonus_ad.button"
+                onClick={startBonusAd}
+                className="w-full py-3 rounded-xl font-display font-bold text-sm"
+                style={{
+                  background: "rgba(212,175,55,0.15)",
+                  border: "1px solid rgba(212,175,55,0.4)",
+                  color: "#D4AF37",
+                }}
+              >
+                📺 Watch ad for +1 bonus coin
+              </button>
             )}
+            {bonusAdCountdown !== null && (
+              <div
+                className="w-full py-3 rounded-xl font-display font-bold text-sm text-white/50"
+                style={{ background: "rgba(255,255,255,0.05)" }}
+              >
+                Ad ends in {bonusAdCountdown}s...
+              </div>
+            )}
+            {bonusClaimed && (
+              <div
+                className="text-sm font-display font-bold"
+                style={{ color: "#22c55e" }}
+              >
+                ✅ Bonus coin claimed!
+              </div>
+            )}
+            <button
+              type="button"
+              data-ocid="workout.complete.close_button"
+              onClick={() => {
+                setRewardModal(false);
+                onClose();
+              }}
+              className="w-full py-3 rounded-xl font-display font-black text-base"
+              style={{ background: "#D4AF37", color: "#1F1F1F" }}
+            >
+              Awesome! 💪
+            </button>
           </motion.div>
-        </AnimatePresence>
-      </div>
-
-      {/* Finish button for last timed step */}
-      {isLastStep && step.kind === "timed" && seconds <= 0 && (
-        <div className="px-6 pb-8">
-          <Button
-            data-ocid="workout.next_button"
-            onClick={() => {
-              toast.success("💪 Workout complete! Great job!");
-              onClose();
-            }}
-            className="w-full h-14 text-base font-display font-black rounded-2xl"
-            style={{ background: "#D4AF37", color: "#1F1F1F" }}
-          >
-            Finish Workout 🏁
-          </Button>
         </div>
       )}
-    </motion.div>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-50 flex flex-col"
+        style={{ background: "#1F1F1F" }}
+        data-ocid="workout.progress_panel"
+      >
+        {/* Progress bar */}
+        <div className="h-1 w-full bg-white/10">
+          <motion.div
+            className="h-full"
+            style={{ background: "#D4AF37" }}
+            initial={{ width: 0 }}
+            animate={{ width: `${progressPct}%` }}
+            transition={{ duration: 0.5 }}
+          />
+        </div>
+
+        {/* Top bar */}
+        <div className="flex items-center justify-between px-5 pt-4 pb-2">
+          <span className="text-white/50 text-sm font-body">
+            Exercise {currentExerciseIdx + 1} of {totalExercises}
+          </span>
+          <button
+            type="button"
+            data-ocid="workout.close_button"
+            onClick={onClose}
+            className="w-9 h-9 rounded-full flex items-center justify-center"
+            style={{ background: "rgba(255,255,255,0.08)" }}
+          >
+            <X className="w-5 h-5 text-white" />
+          </button>
+        </div>
+
+        {/* Main content */}
+        <div className="flex-1 flex flex-col items-center justify-center px-6 gap-6">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={stepIndex}
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -24 }}
+              transition={{ duration: 0.3 }}
+              className="flex flex-col items-center gap-6 w-full max-w-sm"
+            >
+              {/* REST step */}
+              {step.kind === "rest" && (
+                <>
+                  <span
+                    className="text-3xl font-display font-black tracking-widest"
+                    style={{ color: "#D4AF37" }}
+                  >
+                    REST
+                  </span>
+                  <p
+                    className="text-sm font-body font-bold"
+                    style={{ color: "#D4AF37", opacity: 0.8 }}
+                  >
+                    30 seconds
+                  </p>
+                  <CircleTimer
+                    seconds={seconds}
+                    R={R}
+                    circ={circ}
+                    fill={fill}
+                  />
+                  <p className="text-white/40 text-sm font-body">
+                    {step.afterSetNum === 0
+                      ? "Next exercise coming up..."
+                      : "Next set coming up..."}
+                  </p>
+                  <button
+                    type="button"
+                    data-ocid="workout.skip_rest_button"
+                    onClick={advance}
+                    className="text-white/40 text-sm underline font-body"
+                  >
+                    Skip Rest
+                  </button>
+                </>
+              )}
+
+              {/* TIMED step (warmup/stretch) */}
+              {step.kind === "timed" && (
+                <>
+                  <TypeBadge type={step.exercise.type} />
+                  <Button
+                    data-ocid="workout.next_button"
+                    onClick={advance}
+                    className="w-full h-14 text-base font-display font-black rounded-2xl"
+                    style={{ background: "#D4AF37", color: "#1F1F1F" }}
+                  >
+                    {isLastStep ? "Finish Workout 🏁" : "Skip →  Next Exercise"}
+                  </Button>
+                  {getExerciseImage(step.exercise.name) && (
+                    <img
+                      src={getExerciseImage(step.exercise.name) ?? ""}
+                      alt={step.exercise.name}
+                      className="w-48 h-48 rounded-2xl object-cover mx-auto"
+                      style={{ border: "1px solid rgba(212,175,55,0.35)" }}
+                    />
+                  )}
+                  <h2 className="text-white font-display font-black text-3xl text-center leading-tight">
+                    {step.exercise.name}
+                  </h2>
+                  <CircleTimer
+                    seconds={seconds}
+                    R={R}
+                    circ={circ}
+                    fill={fill}
+                  />
+                  {/* Optional Rest */}
+                  <div
+                    className="w-full rounded-2xl px-5 py-4 flex flex-col items-center gap-3"
+                    style={{
+                      background: "rgba(212,175,55,0.06)",
+                      border: "1px solid rgba(212,175,55,0.18)",
+                    }}
+                  >
+                    <span className="text-white/50 text-xs font-body uppercase tracking-widest">
+                      Optional Rest
+                    </span>
+                    {restActive ? (
+                      <>
+                        <span
+                          className="text-5xl font-display font-black"
+                          style={{ color: "#D4AF37" }}
+                        >
+                          {restSecondsLeft}s
+                        </span>
+                        <button
+                          type="button"
+                          data-ocid="workout.skip_optional_rest_button"
+                          onClick={() => {
+                            setRestActive(false);
+                            setRestSecondsLeft(30);
+                          }}
+                          className="text-white/40 text-sm underline font-body"
+                        >
+                          Skip Rest
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        data-ocid="workout.optional_rest_button"
+                        onClick={() => {
+                          setRestActive(true);
+                          setRestSecondsLeft(30);
+                        }}
+                        className="w-full h-10 rounded-xl text-sm font-display font-bold border"
+                        style={{
+                          borderColor: "#D4AF37",
+                          color: "#D4AF37",
+                          background: "transparent",
+                        }}
+                      >
+                        Start 30s Rest
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {/* STRENGTH step */}
+              {step.kind === "strength" && (
+                <>
+                  <TypeBadge type="STRENGTH" />
+                  <Button
+                    data-ocid="workout.next_button"
+                    onClick={advance}
+                    className="w-full h-14 text-base font-display font-black rounded-2xl"
+                    style={{ background: "#D4AF37", color: "#1F1F1F" }}
+                  >
+                    {isLastStep
+                      ? "Finish Workout 🏁"
+                      : step.setNum < step.totalSets
+                        ? "Done ✓  Next Set"
+                        : "Done ✓  Next Exercise"}
+                  </Button>
+                  {getExerciseImage(step.exercise.name) && (
+                    <img
+                      src={getExerciseImage(step.exercise.name) ?? ""}
+                      alt={step.exercise.name}
+                      className="w-48 h-48 rounded-2xl object-cover mx-auto"
+                      style={{ border: "1px solid rgba(212,175,55,0.35)" }}
+                    />
+                  )}
+                  <h2 className="text-white font-display font-black text-3xl text-center leading-tight">
+                    {step.exercise.name}
+                  </h2>
+                  <div
+                    className="rounded-2xl px-8 py-5 text-center"
+                    style={{
+                      background: "rgba(212,175,55,0.1)",
+                      border: "1px solid rgba(212,175,55,0.3)",
+                    }}
+                  >
+                    <div
+                      className="text-5xl font-display font-black mb-1"
+                      style={{ color: "#D4AF37" }}
+                    >
+                      {step.exercise.reps}
+                    </div>
+                    <div className="text-white/50 text-sm font-body">
+                      Set {step.setNum} of {step.totalSets}
+                    </div>
+                  </div>
+                  {step.exercise.note ? (
+                    <p className="text-amber-400/60 text-xs font-body text-center font-semibold">
+                      💡 {step.exercise.note}
+                    </p>
+                  ) : (
+                    <p className="text-white/30 text-xs font-body text-center">
+                      Images show dumbbells — you can also use bags or anything
+                      heavy with a good grip 💪
+                    </p>
+                  )}
+                  {/* Optional Rest */}
+                  <div
+                    className="w-full rounded-2xl px-5 py-4 flex flex-col items-center gap-3"
+                    style={{
+                      background: "rgba(212,175,55,0.06)",
+                      border: "1px solid rgba(212,175,55,0.18)",
+                    }}
+                  >
+                    <span className="text-white/50 text-xs font-body uppercase tracking-widest">
+                      Optional Rest
+                    </span>
+                    {restActive ? (
+                      <>
+                        <span
+                          className="text-5xl font-display font-black"
+                          style={{ color: "#D4AF37" }}
+                        >
+                          {restSecondsLeft}s
+                        </span>
+                        <button
+                          type="button"
+                          data-ocid="workout.skip_optional_rest_button"
+                          onClick={() => {
+                            setRestActive(false);
+                            setRestSecondsLeft(30);
+                          }}
+                          className="text-white/40 text-sm underline font-body"
+                        >
+                          Skip Rest
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        data-ocid="workout.optional_rest_button"
+                        onClick={() => {
+                          setRestActive(true);
+                          setRestSecondsLeft(30);
+                        }}
+                        className="w-full h-10 rounded-xl text-sm font-display font-bold border"
+                        style={{
+                          borderColor: "#D4AF37",
+                          color: "#D4AF37",
+                          background: "transparent",
+                        }}
+                      >
+                        Start 30s Rest
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+            </motion.div>
+          </AnimatePresence>
+        </div>
+      </motion.div>
+    </>
   );
 }
 

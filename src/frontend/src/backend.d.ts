@@ -125,6 +125,18 @@ export interface UserProfile {
     tier: Tier;
     level: bigint;
 }
+export interface AvatarData {
+    skinTone: string;
+    hair: string;
+    hairColor: string;
+    face: string;
+    outfit: string;
+    accessory: string;
+}
+export interface WorkoutReward {
+    xpGained: bigint;
+    coinsGained: bigint;
+}
 export enum Difficulty {
     easy = "easy",
     hard = "hard",
@@ -190,4 +202,18 @@ export interface backendInterface {
     submitTournamentScore(tournamentId: bigint, pushupCount: bigint): Promise<void>;
     transform(input: TransformationInput): Promise<TransformationOutput>;
     updateMyBattleScore(code: string, score: bigint): Promise<void>;
+    // Stage B: Coins
+    getMyCoins(): Promise<bigint>;
+    completeWorkout(): Promise<WorkoutReward>;
+    addBonusCoins(amount: bigint): Promise<bigint>;
+    // Stage B: Avatar Shop
+    getMyOwnedItems(): Promise<Array<string>>;
+    purchaseAvatarItem(itemId: string): Promise<{ ok: bigint } | { err: string }>;
+    // Stage B: Avatar Customization
+    getMyAvatar(): Promise<AvatarData | null>;
+    saveAvatarCustomization(skinTone: string, hair: string, hairColor: string, face: string, outfit: string, accessory: string): Promise<void>;
+    // Stage B: Premium
+    isPremiumActive(): Promise<boolean>;
+    getPremiumUntil(): Promise<bigint>;
+    activatePremium(): Promise<bigint>;
 }

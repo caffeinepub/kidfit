@@ -15,13 +15,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { Apple, Eye, EyeOff, Loader2, Lock, Plus, Trash2 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Apple, Crown, Eye, Loader2, Lock, Plus, Trash2 } from "lucide-react";
 import { motion } from "motion/react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { UserRole } from "../backend.d";
+import { useActor } from "../hooks/useActor";
 import { useCreateCheckoutSession, useUserRole } from "../hooks/useQueries";
 
 interface DietEntry {
@@ -54,9 +55,6 @@ const CATEGORY_COLORS: Record<string, string> = {
   "Post-workout": "text-chart-2",
 };
 
-const AD_UNLOCK_KEY = "diet_nonveg_unlocked_until";
-const AD_DURATION_MS = 5 * 60 * 60 * 1000; // 5 hours
-
 function loadDietEntries(): DietEntry[] {
   try {
     const stored = localStorage.getItem("kidfit_diet_entries");
@@ -71,33 +69,41 @@ function saveDietEntries(entries: DietEntry[]) {
   localStorage.setItem("kidfit_diet_entries", JSON.stringify(entries));
 }
 
-function isNonVegUnlocked(): boolean {
-  try {
-    const val = localStorage.getItem(AD_UNLOCK_KEY);
-    if (!val) return false;
-    return Date.now() < Number.parseInt(val, 10);
-  } catch {
-    return false;
-  }
+type AppPage =
+  | "home"
+  | "exercises"
+  | "pushups"
+  | "tournaments"
+  | "profile"
+  | "battle"
+  | "diet"
+  | "admin"
+  | "leaderboard"
+  | "avatar"
+  | "premium";
+
+interface DietPageProps {
+  onNavigate?: (page: AppPage) => void;
 }
 
-function unlockNonVeg() {
-  localStorage.setItem(AD_UNLOCK_KEY, String(Date.now() + AD_DURATION_MS));
-}
-
-export default function DietPage() {
+export default function DietPage({ onNavigate }: DietPageProps) {
   const { data: roleData } = useUserRole();
   const isAdmin = roleData === UserRole.admin;
   const createCheckout = useCreateCheckoutSession();
+  const { actor } = useActor();
+  const { data: isPremium = false } = useQuery<boolean>({
+    queryKey: ["isPremium"],
+    queryFn: async () => {
+      if (!actor) return false;
+      return (
+        actor as unknown as { isPremiumActive(): Promise<boolean> }
+      ).isPremiumActive();
+    },
+    enabled: !!actor,
+  });
 
   const [entries, setEntries] = useState<DietEntry[]>(() => loadDietEntries());
   const [addOpen, setAddOpen] = useState(false);
-
-  // Ad gate state for non-veg
-  const [nonVegUnlocked, setNonVegUnlocked] = useState(isNonVegUnlocked);
-  const [adCountdown, setAdCountdown] = useState(0);
-  const [adRunning, setAdRunning] = useState(false);
-  const adTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Veg payment state
   const vegUnlocked = new URLSearchParams(window.location.search).has(
@@ -131,26 +137,6 @@ export default function DietPage() {
     }
   }, [vegUnlocked]);
 
-  const handleWatchAd = () => {
-    if (adRunning) return;
-    setAdRunning(true);
-    setAdCountdown(15);
-    adTimerRef.current = setInterval(() => {
-      setAdCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(adTimerRef.current!);
-          adTimerRef.current = null;
-          setAdRunning(false);
-          unlockNonVeg();
-          setNonVegUnlocked(true);
-          toast.success("🍗 Non-veg diet unlocked for 5 hours!");
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-  };
-
   const handleSubscribeVeg = async () => {
     setStripeLoading(true);
     try {
@@ -162,7 +148,7 @@ export default function DietPage() {
             productName: "Veg Diet Plan",
             currency: "inr",
             quantity: 1n,
-            priceInCents: 3000n,
+            priceInCents: 4000n,
             productDescription: "Weekly veg diet plan access",
           },
         ],
@@ -218,7 +204,6 @@ export default function DietPage() {
   };
 
   const vegEntries = entries.filter((e) => e.isVeg !== false);
-  const nonVegEntries = entries.filter((e) => e.isVeg === false);
 
   const renderEntryCard = (entry: DietEntry, idx: number) => (
     <motion.div
@@ -241,15 +226,6 @@ export default function DietPage() {
             </span>
             <span className="text-xs bg-muted/40 text-muted-foreground rounded-full px-2 py-0.5 font-body">
               {entry.calories} kcal
-            </span>
-            <span
-              className={`text-xs rounded-full px-2 py-0.5 font-body ${
-                entry.isVeg !== false
-                  ? "bg-green-500/20 text-green-400"
-                  : "bg-red-500/20 text-red-400"
-              }`}
-            >
-              {entry.isVeg !== false ? "🥦 Veg" : "🍗 Non-Veg"}
             </span>
           </div>
           <h3 className="font-display font-bold text-base">{entry.name}</h3>
@@ -318,241 +294,217 @@ export default function DietPage() {
         )}
       </header>
 
-      <main className="flex-1 px-4">
-        <Tabs defaultValue="veg" className="space-y-4">
-          <TabsList className="w-full grid grid-cols-2 bg-muted/30 border border-border">
-            <TabsTrigger
-              data-ocid="diet.veg_tab"
-              value="veg"
-              className="font-body text-sm gap-2"
-            >
-              🥦 Veg
-            </TabsTrigger>
-            <TabsTrigger
-              data-ocid="diet.nonveg_tab"
-              value="nonveg"
-              className="font-body text-sm gap-2"
-            >
-              🍗 Non-Veg
-            </TabsTrigger>
-          </TabsList>
+      <main className="flex-1 px-4 space-y-4">
+        {/* TABS */}
+        <div
+          className="flex rounded-2xl overflow-hidden"
+          style={{
+            background: "rgba(255,255,255,0.05)",
+            border: "1px solid rgba(255,255,255,0.1)",
+          }}
+        >
+          <button
+            type="button"
+            data-ocid="diet.veg.tab"
+            className="flex-1 py-3 font-display font-bold text-sm"
+            style={{ background: "rgba(34,197,94,0.15)", color: "#22c55e" }}
+          >
+            🥗 Veg Diet
+          </button>
+          <button
+            type="button"
+            data-ocid="diet.nonveg.tab"
+            className="flex-1 py-3 font-display font-bold text-sm"
+            style={{ color: isPremium ? "#D4AF37" : "rgba(255,255,255,0.4)" }}
+          >
+            🍗 Non-Veg {!isPremium && "🔒"}
+          </button>
+        </div>
 
-          {/* ===== VEG TAB ===== */}
-          <TabsContent value="veg" className="space-y-4">
-            {!vegUnlocked ? (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="card-sporty p-8 text-center space-y-4"
+        {/* Non-Veg Premium Gate */}
+        {!isPremium && (
+          <div
+            className="rounded-2xl p-6 text-center space-y-4"
+            style={{
+              background: "rgba(212,175,55,0.06)",
+              border: "1px solid rgba(212,175,55,0.2)",
+            }}
+            data-ocid="diet.nonveg.locked.panel"
+          >
+            <Crown className="w-10 h-10 mx-auto" style={{ color: "#D4AF37" }} />
+            <h3 className="font-display font-bold text-white text-base">
+              Non-Veg Plan is Premium Only
+            </h3>
+            <p className="text-xs text-white/50 font-body">
+              Upgrade to Premium to access chicken, eggs, tuna, turkey and more
+              high-protein non-veg meal plans.
+            </p>
+            <button
+              type="button"
+              data-ocid="diet.upgrade_premium.button"
+              onClick={() => onNavigate?.("premium")}
+              className="w-full py-3 rounded-2xl font-display font-bold text-sm"
+              style={{ background: "#D4AF37", color: "#1F1F1F" }}
+            >
+              👑 Upgrade to Premium
+            </button>
+          </div>
+        )}
+
+        {/* Non-Veg Content (premium only) */}
+        {isPremium && (
+          <div className="space-y-3" data-ocid="diet.nonveg.section">
+            <h3 className="font-display font-bold text-white text-base flex items-center gap-2">
+              🍗 Non-Veg Meal Plans
+              <span
+                className="text-xs px-2 py-0.5 rounded-full font-body"
+                style={{ background: "rgba(212,175,55,0.2)", color: "#D4AF37" }}
+              >
+                Premium
+              </span>
+            </h3>
+            {[
+              {
+                name: "Grilled Chicken Breast",
+                cal: 165,
+                protein: 31,
+                carbs: 0,
+                fats: 4,
+                desc: "High-protein lean muscle builder",
+              },
+              {
+                name: "Whole Eggs",
+                cal: 155,
+                protein: 13,
+                carbs: 1,
+                fats: 11,
+                desc: "Complete amino acid profile",
+              },
+              {
+                name: "Tuna (canned in water)",
+                cal: 109,
+                protein: 25,
+                carbs: 0,
+                fats: 1,
+                desc: "Low fat, ultra high protein",
+              },
+              {
+                name: "Ground Turkey",
+                cal: 149,
+                protein: 19,
+                carbs: 0,
+                fats: 8,
+                desc: "Lean, versatile protein source",
+              },
+            ].map((item, idx) => (
+              <div
+                key={item.name}
+                data-ocid={`diet.nonveg.item.${idx + 1}` as string}
+                className="rounded-2xl p-4"
                 style={{
-                  background:
-                    "linear-gradient(135deg, oklch(0.14 0.06 150), oklch(0.18 0.08 90 / 0.3))",
+                  background: "rgba(255,255,255,0.04)",
+                  border: "1px solid rgba(255,255,255,0.08)",
                 }}
               >
-                <div className="w-16 h-16 rounded-2xl bg-primary/15 border border-primary/20 flex items-center justify-center text-4xl mx-auto">
-                  🥗
+                <div className="flex justify-between items-start mb-2">
+                  <span className="font-display font-bold text-white text-sm">
+                    {item.name}
+                  </span>
+                  <span
+                    className="text-xs font-body"
+                    style={{ color: "#D4AF37" }}
+                  >
+                    {item.cal} kcal
+                  </span>
                 </div>
-                <h2 className="font-display font-black text-2xl">
-                  Veg Diet Plan
-                </h2>
-                <p className="text-muted-foreground text-sm font-body leading-relaxed max-w-[260px] mx-auto">
-                  Get weekly vegetarian meal plans curated for teen athletes.
-                  Balanced nutrition to fuel your workouts and recovery.
+                <p className="text-xs text-white/50 font-body mb-2">
+                  {item.desc}
                 </p>
-                <div
-                  className="rounded-xl p-4 border"
-                  style={{
-                    background: "oklch(0.15 0.05 150 / 0.4)",
-                    borderColor: "oklch(0.55 0.18 150 / 0.3)",
-                  }}
-                >
-                  <div className="font-display font-black text-3xl text-neon-green">
-                    ₹30
-                  </div>
-                  <div className="text-xs text-muted-foreground font-body">
-                    per week
-                  </div>
+                <div className="flex gap-3 text-xs font-body text-white/40">
+                  <span>P: {item.protein}g</span>
+                  <span>C: {item.carbs}g</span>
+                  <span>F: {item.fats}g</span>
                 </div>
-                <Button
-                  data-ocid="diet.subscribe_button"
-                  onClick={handleSubscribeVeg}
-                  disabled={stripeLoading}
-                  className="w-full h-14 bg-primary text-primary-foreground font-display font-bold text-lg glow-green"
-                >
-                  {stripeLoading ? (
-                    <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                  ) : (
-                    <Lock className="w-5 h-5 mr-2" />
-                  )}
-                  {stripeLoading
-                    ? "Opening checkout..."
-                    : "Subscribe for ₹30/week"}
-                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ===== VEG DIET ===== */}
+        {!vegUnlocked ? (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="card-sporty p-8 text-center space-y-4"
+            style={{
+              background:
+                "linear-gradient(135deg, oklch(0.14 0.06 150), oklch(0.18 0.08 90 / 0.3))",
+            }}
+          >
+            <div className="w-16 h-16 rounded-2xl bg-primary/15 border border-primary/20 flex items-center justify-center text-4xl mx-auto">
+              🥗
+            </div>
+            <h2 className="font-display font-black text-2xl">Veg Diet Plan</h2>
+            <p className="text-muted-foreground text-sm font-body leading-relaxed max-w-[260px] mx-auto">
+              Get weekly vegetarian meal plans curated for teen athletes.
+              Balanced nutrition to fuel your workouts and recovery.
+            </p>
+            <div
+              className="rounded-xl p-4 border"
+              style={{
+                background: "oklch(0.15 0.05 150 / 0.4)",
+                borderColor: "oklch(0.55 0.18 150 / 0.3)",
+              }}
+            >
+              <div className="font-display font-black text-3xl text-neon-green">
+                ₹40
+              </div>
+              <div className="text-xs text-muted-foreground font-body">
+                per week
+              </div>
+            </div>
+            <Button
+              data-ocid="diet.subscribe_button"
+              onClick={handleSubscribeVeg}
+              disabled={stripeLoading}
+              className="w-full h-14 bg-primary text-primary-foreground font-display font-bold text-lg glow-green"
+            >
+              {stripeLoading ? (
+                <Loader2 className="w-5 h-5 animate-spin mr-2" />
+              ) : (
+                <Lock className="w-5 h-5 mr-2" />
+              )}
+              {stripeLoading ? "Opening checkout..." : "Subscribe for ₹40/week"}
+            </Button>
+          </motion.div>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-xs font-body text-neon-green">
+              <Eye className="w-4 h-4" />
+              <span>Veg diet plan active</span>
+            </div>
+            {vegEntries.length === 0 ? (
+              <motion.div
+                data-ocid="diet.empty_state"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="card-sporty p-8 text-center"
+              >
+                <div className="text-5xl mb-3">🥦</div>
+                <h3 className="font-display font-bold text-lg mb-1">
+                  No veg entries yet
+                </h3>
+                <p className="text-sm text-muted-foreground font-body">
+                  Admin will add veg diet entries soon!
+                </p>
               </motion.div>
             ) : (
               <div className="space-y-3">
-                <div className="flex items-center gap-2 text-xs font-body text-neon-green">
-                  <Eye className="w-4 h-4" />
-                  <span>Veg diet plan active</span>
-                </div>
-                {vegEntries.length === 0 ? (
-                  <motion.div
-                    data-ocid="diet.empty_state"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="card-sporty p-8 text-center"
-                  >
-                    <div className="text-5xl mb-3">🥦</div>
-                    <h3 className="font-display font-bold text-lg mb-1">
-                      No veg entries yet
-                    </h3>
-                    <p className="text-sm text-muted-foreground font-body">
-                      Admin will add veg diet entries soon!
-                    </p>
-                  </motion.div>
-                ) : (
-                  <div className="space-y-3">
-                    {vegEntries.map((entry, idx) =>
-                      renderEntryCard(entry, idx),
-                    )}
-                  </div>
-                )}
+                {vegEntries.map((entry, idx) => renderEntryCard(entry, idx))}
               </div>
             )}
-          </TabsContent>
-
-          {/* ===== NON-VEG TAB ===== */}
-          <TabsContent value="nonveg" className="space-y-4">
-            {!nonVegUnlocked ? (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="card-sporty p-8 text-center space-y-4"
-                style={{
-                  background:
-                    "linear-gradient(135deg, oklch(0.14 0.04 30), oklch(0.18 0.06 22 / 0.3))",
-                }}
-              >
-                <div className="w-16 h-16 rounded-2xl bg-amber-500/15 border border-amber-500/20 flex items-center justify-center text-4xl mx-auto">
-                  🍗
-                </div>
-                <h2 className="font-display font-black text-2xl">
-                  Non-Veg Diet Plan
-                </h2>
-                <p className="text-muted-foreground text-sm font-body leading-relaxed max-w-[260px] mx-auto">
-                  Free non-veg meal plans for teen athletes. High-protein meals
-                  for muscle building and recovery. Watch a short ad to unlock!
-                </p>
-                <div
-                  className="rounded-xl p-4 border"
-                  style={{
-                    background: "oklch(0.15 0.06 42 / 0.4)",
-                    borderColor: "oklch(0.55 0.18 42 / 0.3)",
-                  }}
-                >
-                  <div
-                    className="font-display font-black text-3xl"
-                    style={{ color: "oklch(0.85 0.22 90)" }}
-                  >
-                    FREE
-                  </div>
-                  <div className="text-xs text-muted-foreground font-body">
-                    watch a 15s ad to unlock for 5 hours
-                  </div>
-                </div>
-
-                {adRunning ? (
-                  <div className="space-y-3">
-                    <div
-                      className="rounded-xl p-6 border text-center"
-                      style={{
-                        background: "oklch(0.12 0.04 42 / 0.6)",
-                        borderColor: "oklch(0.55 0.18 42 / 0.4)",
-                      }}
-                    >
-                      <div
-                        className="font-display font-black text-5xl mb-2"
-                        style={{ color: "oklch(0.85 0.22 90)" }}
-                      >
-                        {adCountdown}
-                      </div>
-                      <div className="text-sm text-muted-foreground font-body">
-                        Ad playing... {adCountdown}s remaining
-                      </div>
-                      <div className="w-full bg-muted/30 rounded-full h-2 mt-3">
-                        <div
-                          className="h-2 rounded-full transition-all duration-1000"
-                          style={{
-                            width: `${((15 - adCountdown) / 15) * 100}%`,
-                            background: "oklch(0.85 0.22 90)",
-                          }}
-                        />
-                      </div>
-                    </div>
-                    <p className="text-xs text-muted-foreground font-body text-center">
-                      🎬 Simulating ad — this is where a real ad plays
-                    </p>
-                  </div>
-                ) : (
-                  <Button
-                    data-ocid="diet.watch_ad_button"
-                    onClick={handleWatchAd}
-                    className="w-full h-14 font-display font-bold text-lg"
-                    style={{
-                      background: "oklch(0.55 0.18 42)",
-                      color: "oklch(0.95 0.02 42)",
-                    }}
-                  >
-                    <EyeOff className="w-5 h-5 mr-2" />
-                    Watch 15s Ad — Unlock Free
-                  </Button>
-                )}
-              </motion.div>
-            ) : (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-xs font-body text-neon-orange">
-                    <Eye className="w-4 h-4" />
-                    <span>Non-veg diet unlocked (5 hrs)</span>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      localStorage.removeItem(AD_UNLOCK_KEY);
-                      setNonVegUnlocked(false);
-                    }}
-                    className="text-xs text-muted-foreground h-7"
-                  >
-                    Re-lock
-                  </Button>
-                </div>
-                {nonVegEntries.length === 0 ? (
-                  <motion.div
-                    data-ocid="diet.empty_state"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="card-sporty p-8 text-center"
-                  >
-                    <div className="text-5xl mb-3">🍗</div>
-                    <h3 className="font-display font-bold text-lg mb-1">
-                      No non-veg entries yet
-                    </h3>
-                    <p className="text-sm text-muted-foreground font-body">
-                      Admin will add non-veg diet entries soon!
-                    </p>
-                  </motion.div>
-                ) : (
-                  <div className="space-y-3">
-                    {nonVegEntries.map((entry, idx) =>
-                      renderEntryCard(entry, idx),
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
+          </div>
+        )}
       </main>
 
       {/* Add Diet Entry Dialog */}
@@ -570,7 +522,7 @@ export default function DietPage() {
               </Label>
               <Input
                 data-ocid="diet.name.input"
-                placeholder="e.g. Grilled Chicken Breast"
+                placeholder="e.g. Grilled Paneer"
                 value={form.name}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, name: e.target.value }))

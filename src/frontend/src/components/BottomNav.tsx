@@ -19,7 +19,9 @@ type Page =
   | "battle"
   | "diet"
   | "admin"
-  | "leaderboard";
+  | "leaderboard"
+  | "avatar"
+  | "premium";
 
 interface BottomNavProps {
   current: Page;
@@ -83,7 +85,9 @@ function NavRow({
 }) {
   return (
     <div
-      className={`grid grid-cols-4 h-10 ${isTopRow ? "border-b border-border/30" : ""}`}
+      className={`grid grid-cols-4 h-11 ${
+        isTopRow ? "border-b border-border/30" : ""
+      }`}
     >
       {items.map((item) => {
         const Icon = item.icon;
@@ -97,21 +101,53 @@ function NavRow({
             className={cn(
               "flex flex-col items-center justify-center gap-0.5 transition-all duration-200 relative",
               isActive
-                ? "text-neon-green"
-                : "text-muted-foreground hover:text-foreground",
+                ? "text-foreground"
+                : "text-muted-foreground hover:text-foreground/70",
             )}
             aria-current={isActive ? "page" : undefined}
           >
+            {/* Gold top accent line */}
             {isActive && (
-              <span className="absolute top-0 left-1/2 -translate-x-1/2 w-5 h-0.5 rounded-full bg-neon-green" />
+              <span
+                className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-0.5 rounded-full"
+                style={{
+                  background:
+                    "linear-gradient(90deg, transparent, oklch(0.82 0.17 90), transparent)",
+                  boxShadow: "0 0 8px oklch(0.82 0.17 90 / 0.8)",
+                }}
+              />
+            )}
+            {/* Gold glow under active icon */}
+            {isActive && (
+              <span
+                className="absolute inset-0 rounded-sm pointer-events-none"
+                style={{
+                  background:
+                    "radial-gradient(ellipse 60% 60% at 50% 40%, oklch(0.82 0.17 90 / 0.12) 0%, transparent 70%)",
+                }}
+              />
             )}
             <Icon
               className={cn(
                 "w-4 h-4 transition-all duration-200",
-                isActive && "drop-shadow-[0_0_6px_oklch(0.85_0.22_130)]",
+                isActive ? "scale-110" : "",
               )}
+              style={
+                isActive
+                  ? {
+                      color: "oklch(0.82 0.17 90)",
+                      filter: "drop-shadow(0 0 6px oklch(0.82 0.17 90 / 0.7))",
+                    }
+                  : undefined
+              }
             />
-            <span className="text-[8px] font-body font-medium leading-none">
+            <span
+              className={cn(
+                "text-[8px] font-body font-medium leading-none transition-all duration-200",
+                isActive ? "font-bold" : "",
+              )}
+              style={isActive ? { color: "oklch(0.82 0.17 90)" } : undefined}
+            >
               {item.label}
             </span>
           </button>
@@ -129,7 +165,14 @@ export default function BottomNav({ current, onNavigate }: BottomNavProps) {
     >
       {/* Spacer for ad banner */}
       <div className="h-[60px] pointer-events-none" id="ad-spacer" />
-      <div className="bg-card/95 backdrop-blur-md border-t border-border/60">
+      <div
+        className="border-t border-border/60"
+        style={{
+          background:
+            "linear-gradient(to top, oklch(0.12 0.02 42 / 0.98), oklch(0.14 0.025 42 / 0.95))",
+          backdropFilter: "blur(16px)",
+        }}
+      >
         <NavRow
           items={navRow1}
           current={current}

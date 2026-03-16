@@ -25,9 +25,10 @@ type PosePhase = "up" | "down" | "unknown";
 
 const SAMPLE_ROWS = 40;
 const MOTION_THRESH = 6;
-const STABLE_FRAMES = 3;
+const STABLE_FRAMES = 4;
 const MIN_REP_MS = 700;
-const PHASE_HYSTERESIS = 0.07;
+const PHASE_HYSTERESIS = 0.1;
+const IDLE_FRAMES_REQUIRED = 50;
 
 interface MotionState {
   prevGray: Uint8Array | null;
@@ -38,6 +39,8 @@ interface MotionState {
   lastRepTime: number;
   lastTransition: number;
   centroidHistory: number[];
+  inPosition: boolean;
+  stableIdleFrames: number;
 }
 
 function makeMotionState(): MotionState {
@@ -50,6 +53,8 @@ function makeMotionState(): MotionState {
     lastRepTime: 0,
     lastTransition: 0,
     centroidHistory: [],
+    inPosition: false,
+    stableIdleFrames: 0,
   };
 }
 
@@ -96,6 +101,22 @@ function analyseFrame(
         centroidNumer += rowMotion * (row / SAMPLE_ROWS);
       }
     }
+
+    // --- inPosition gate ---
+    if (!state.inPosition) {
+      const avgMotionPerRow = motionSum / SAMPLE_ROWS;
+      if (avgMotionPerRow < 0.5) {
+        state.stableIdleFrames += 1;
+      } else {
+        state.stableIdleFrames = 0;
+      }
+      if (state.stableIdleFrames >= IDLE_FRAMES_REQUIRED) {
+        state.inPosition = true;
+      }
+      state.prevGray = gray;
+      return { phase: "unknown", repCounted: false };
+    }
+    // --- end inPosition gate ---
 
     if (motionSum > 0) {
       const centroid = centroidNumer / motionSum;
@@ -179,6 +200,7 @@ export default function PushUpCounterPage() {
 
   const [count, setCount] = useState(0);
   const [phase, setPhase] = useState<PosePhase>("unknown");
+  const [isInPosition, setIsInPosition] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
   const [sessionStarted, setSessionStarted] = useState(false);
   const [countKey, setCountKey] = useState(0);
@@ -225,6 +247,7 @@ export default function PushUpCounterPage() {
       motionStateRef.current,
     );
 
+    setIsInPosition(motionStateRef.current.inPosition);
     setPhase(newPhase);
 
     if (repCounted) {
@@ -255,6 +278,7 @@ export default function PushUpCounterPage() {
   const handleStart = async () => {
     setCount(0);
     setPhase("unknown");
+    setIsInPosition(false);
     motionStateRef.current = makeMotionState();
     setSessionStarted(true);
     const ok = await startCamera();
@@ -286,6 +310,7 @@ export default function PushUpCounterPage() {
   const handleReset = () => {
     setCount(0);
     setPhase("unknown");
+    setIsInPosition(false);
     motionStateRef.current = makeMotionState();
     setCalibrating(true);
     setTimeout(() => setCalibrating(false), 3000);
@@ -375,7 +400,25 @@ export default function PushUpCounterPage() {
             </div>
           )}
 
-          {isActive && (
+          {isActive && !isDetecting && (
+            <div
+              className={cn(
+                "absolute top-3 left-3 z-20 px-3 py-1 rounded-full border font-display font-bold text-xs",
+                pi.bg,
+                pi.color,
+              )}
+            >
+              {pi.label}
+            </div>
+          )}
+
+          {isActive && isDetecting && !isInPosition && (
+            <div className="absolute top-3 left-3 z-20 px-3 py-1 rounded-full border font-display font-bold text-xs bg-amber-500/20 border-amber-500/40 text-amber-400">
+              HOLD STILL...
+            </div>
+          )}
+
+          {isActive && isDetecting && isInPosition && (
             <div
               className={cn(
                 "absolute top-3 left-3 z-20 px-3 py-1 rounded-full border font-display font-bold text-xs",
@@ -393,6 +436,22 @@ export default function PushUpCounterPage() {
             </div>
           )}
         </div>
+
+        {/* Position status banner */}
+        {isDetecting && !isInPosition && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="rounded-xl px-4 py-3 border text-sm font-body text-center"
+            style={{
+              background: "oklch(0.15 0.06 80 / 0.4)",
+              borderColor: "oklch(0.75 0.18 80 / 0.4)",
+              color: "oklch(0.85 0.18 80)",
+            }}
+          >
+            ⚠️ Get into push-up position and hold still...
+          </motion.div>
+        )}
 
         {/* Rep Counter */}
         <motion.div className="card-sporty p-6 text-center relative overflow-hidden">
@@ -421,7 +480,7 @@ export default function PushUpCounterPage() {
                   damping: 15,
                 }}
                 className={cn(
-                  "font-display font-black text-8xl leading-none mb-2 transition-colors duration-150",
+                  "font-display font-black text-9xl leading-none mb-2 transition-colors duration-150",
                   repPulse || manualPulse
                     ? "text-yellow-300"
                     : "text-neon-green",
@@ -429,8 +488,8 @@ export default function PushUpCounterPage() {
                 style={{
                   textShadow:
                     repPulse || manualPulse
-                      ? "0 0 40px oklch(0.9 0.28 90 / 0.8)"
-                      : "0 0 30px oklch(0.85 0.22 130 / 0.4)",
+                      ? "0 0 60px oklch(0.9 0.28 90 / 0.9), 0 0 120px oklch(0.85 0.25 90 / 0.5)"
+                      : "0 0 40px oklch(0.85 0.22 130 / 0.5), 0 0 80px oklch(0.85 0.22 130 / 0.2)",
                 }}
               >
                 {count}
@@ -491,8 +550,9 @@ export default function PushUpCounterPage() {
               <li>
                 • Make sure your head, shoulders, and hips are all visible
               </li>
+              <li>• Get into push-up position and hold still for 2 seconds</li>
+              <li>• Detection starts automatically once you're steady</li>
               <li>• Do push-ups — go DOWN close to the floor, then push UP</li>
-              <li>• Camera tracks your body movement to count reps</li>
               <li>• Good lighting helps — avoid strong backlight behind you</li>
               <li>• Camera not working? Use the manual tap button!</li>
             </ul>

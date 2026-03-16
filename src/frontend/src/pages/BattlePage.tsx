@@ -48,9 +48,10 @@ interface ChatMessage {
 
 const SAMPLE_ROWS = 40;
 const MOTION_THRESH = 6;
-const STABLE_FRAMES = 3;
+const STABLE_FRAMES = 4;
 const MIN_REP_MS = 700;
-const PHASE_HYSTERESIS = 0.07;
+const PHASE_HYSTERESIS = 0.1;
+const IDLE_FRAMES_REQUIRED = 50;
 
 interface MotionState {
   prevGray: Uint8Array | null;
@@ -61,6 +62,8 @@ interface MotionState {
   lastRepTime: number;
   lastTransition: number;
   centroidHistory: number[];
+  inPosition: boolean;
+  stableIdleFrames: number;
 }
 
 function makeMotionState(): MotionState {
@@ -73,6 +76,8 @@ function makeMotionState(): MotionState {
     lastRepTime: 0,
     lastTransition: 0,
     centroidHistory: [],
+    inPosition: false,
+    stableIdleFrames: 0,
   };
 }
 
@@ -119,6 +124,22 @@ function analyseFrame(
         centroidNumer += rowMotion * (row / SAMPLE_ROWS);
       }
     }
+
+    // --- inPosition gate ---
+    if (!state.inPosition) {
+      const avgMotionPerRow = motionSum / SAMPLE_ROWS;
+      if (avgMotionPerRow < 0.5) {
+        state.stableIdleFrames += 1;
+      } else {
+        state.stableIdleFrames = 0;
+      }
+      if (state.stableIdleFrames >= IDLE_FRAMES_REQUIRED) {
+        state.inPosition = true;
+      }
+      state.prevGray = gray;
+      return { phase: "unknown", repCounted: false };
+    }
+    // --- end inPosition gate ---
 
     if (motionSum > 0) {
       const centroid = centroidNumer / motionSum;
@@ -294,6 +315,7 @@ export default function BattlePage() {
 
   const [count, setCount] = useState(0);
   const [phase, setPhase] = useState<PosePhase>("unknown");
+  const [isInPosition, setIsInPosition] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
   const [countKey, setCountKey] = useState(0);
   const [repPulse, setRepPulse] = useState(false);
@@ -409,6 +431,7 @@ export default function BattlePage() {
       motionStateRef.current,
     );
 
+    setIsInPosition(motionStateRef.current.inPosition);
     setPhase(newPhase);
 
     if (repCounted) {
@@ -888,7 +911,13 @@ export default function BattlePage() {
                     </div>
                   )}
 
-                  {isActive && (
+                  {isActive && !isInPosition && (
+                    <div className="absolute top-3 left-3 px-3 py-1 rounded-full border font-display font-bold text-xs z-10 bg-amber-500/20 border-amber-500/40 text-amber-400">
+                      HOLD STILL...
+                    </div>
+                  )}
+
+                  {isActive && isInPosition && (
                     <div
                       className={cn(
                         "absolute top-3 left-3 px-3 py-1 rounded-full border font-display font-bold text-xs z-10",

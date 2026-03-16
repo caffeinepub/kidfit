@@ -17,6 +17,7 @@ import { Tier } from "../backend.d";
 import RewardedAdModal from "../components/RewardedAdModal";
 import TierBadge from "../components/TierBadge";
 import { useAdUnlock } from "../hooks/useAdUnlock";
+import { useCoins } from "../hooks/useCoins";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import { usePushUpStats } from "../hooks/usePushUpStats";
 import { useUserProfile } from "../hooks/useQueries";
@@ -37,20 +38,21 @@ type Page =
   | "profile"
   | "battle"
   | "diet"
-  | "admin";
+  | "admin"
+  | "avatar"
+  | "premium";
 
 interface ProfilePageProps {
   onNavigate?: (page: Page) => void;
 }
 
-export default function ProfilePage({
-  onNavigate: _onNavigate,
-}: ProfilePageProps) {
+export default function ProfilePage({ onNavigate }: ProfilePageProps) {
   const { isUnlocked: profileUnlocked, unlock: unlockProfile } = useAdUnlock();
   const [adModalOpen, setAdModalOpen] = useState(false);
   const { data: profile, isLoading } = useUserProfile();
   const { clear, identity } = useInternetIdentity();
   const { stats } = usePushUpStats();
+  const { data: coins = BigInt(0) } = useCoins();
 
   const handleViewProfile = () => {
     setAdModalOpen(true);
@@ -281,6 +283,21 @@ export default function ProfilePage({
                           Total Push-Ups
                         </div>
                       </div>
+                      <div
+                        data-ocid="profile.coins.card"
+                        className="col-span-2 bg-muted/30 rounded-xl p-3 text-center"
+                        style={{ border: "1px solid rgba(212,175,55,0.25)" }}
+                      >
+                        <div
+                          className="font-display font-black text-2xl"
+                          style={{ color: "#D4AF37" }}
+                        >
+                          🪙 {Number(coins)}
+                        </div>
+                        <div className="text-xs text-muted-foreground font-body">
+                          Coins
+                        </div>
+                      </div>
                     </div>
 
                     {/* Badges Section */}
@@ -313,6 +330,36 @@ export default function ProfilePage({
                     </div>
                   </>
                 )}
+              </div>
+
+              {/* Avatar & Premium Buttons */}
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  data-ocid="profile.avatar.button"
+                  onClick={() => onNavigate?.("avatar")}
+                  className="flex-1 py-3 rounded-2xl font-display font-bold text-sm flex items-center justify-center gap-2"
+                  style={{
+                    background: "rgba(212,175,55,0.12)",
+                    border: "1px solid rgba(212,175,55,0.35)",
+                    color: "#D4AF37",
+                  }}
+                >
+                  🎨 My Avatar
+                </button>
+                <button
+                  type="button"
+                  data-ocid="profile.premium.button"
+                  onClick={() => onNavigate?.("premium")}
+                  className="flex-1 py-3 rounded-2xl font-display font-bold text-sm flex items-center justify-center gap-2"
+                  style={{
+                    background: "rgba(212,175,55,0.12)",
+                    border: "1px solid rgba(212,175,55,0.35)",
+                    color: "#D4AF37",
+                  }}
+                >
+                  👑 Premium
+                </button>
               </div>
 
               {/* Ad-Free Status */}

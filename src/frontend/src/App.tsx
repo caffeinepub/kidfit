@@ -15,6 +15,8 @@ const DietPage = lazy(() => import("./pages/DietPage"));
 const AdminPage = lazy(() => import("./pages/AdminPage"));
 const LeaderboardPage = lazy(() => import("./pages/LeaderboardPage"));
 const AuthPage = lazy(() => import("./pages/AuthPage"));
+const AvatarPage = lazy(() => import("./pages/AvatarPage"));
+const PremiumPage = lazy(() => import("./pages/PremiumPage"));
 
 type Page =
   | "home"
@@ -25,7 +27,9 @@ type Page =
   | "battle"
   | "diet"
   | "admin"
-  | "leaderboard";
+  | "leaderboard"
+  | "avatar"
+  | "premium";
 
 function PageLoader() {
   return (
@@ -66,6 +70,10 @@ export default function App() {
     if (tournamentSuccess) {
       setCurrentPage("tournaments");
       window.history.replaceState({}, "", window.location.pathname);
+    }
+    const premiumSuccess = params.get("premium_success");
+    if (premiumSuccess) {
+      setCurrentPage("premium");
     }
   }, []);
 
@@ -113,11 +121,15 @@ export default function App() {
       case "battle":
         return <BattlePage />;
       case "diet":
-        return <DietPage />;
+        return <DietPage onNavigate={setCurrentPage} />;
       case "admin":
         return <AdminPage />;
       case "leaderboard":
         return <LeaderboardPage />;
+      case "avatar":
+        return <AvatarPage onBack={() => setCurrentPage("profile")} />;
+      case "premium":
+        return <PremiumPage onBack={() => setCurrentPage("profile")} />;
       default:
         return <HomePage onNavigate={setCurrentPage} />;
     }
