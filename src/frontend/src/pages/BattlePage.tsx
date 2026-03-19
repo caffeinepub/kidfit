@@ -374,6 +374,24 @@ export default function BattlePage() {
     };
   }, [battleState, battleCode]);
 
+  // ── Bug Fix 1: Start camera AFTER the active view has mounted ───────────────
+  // Previously startCamera() was called before setBattleState("active"), so
+  // videoRef.current was null when setupVideo() ran. Now we wait for the DOM.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: startCamera is stable; adding it would cause re-trigger loops
+  useEffect(() => {
+    if (battleState !== "active") return;
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      if (cancelled) return;
+      const ok = await startCamera();
+      if (!cancelled && ok) setIsDetecting(true);
+    }, 150); // wait for the <video> element to mount
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [battleState]); // intentionally omit startCamera to avoid re-trigger loops
+
   // ── Mic management ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (battleState !== "active") {
@@ -385,17 +403,26 @@ export default function BattlePage() {
       }
       return;
     }
-    navigator.mediaDevices
-      .getUserMedia({ audio: true, video: false })
-      .then((stream) => {
+    // Bug Fix 2: wrap in try/catch and inform user if mic is unavailable
+    (async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: false,
+        });
         micStreamRef.current = stream;
         for (const t of stream.getAudioTracks()) {
-          t.enabled = false;
+          t.enabled = false; // start muted
         }
-      })
-      .catch(() => {
-        /* mic permission denied – fail silently */
-      });
+        toast.info("Mic ready — tap the mic button to unmute.", {
+          duration: 3000,
+        });
+      } catch {
+        toast.error("Mic permission denied. You can still use text chat.", {
+          duration: 4000,
+        });
+      }
+    })();
     return () => {
       if (micStreamRef.current) {
         for (const t of micStreamRef.current.getTracks()) {
@@ -532,12 +559,12 @@ export default function BattlePage() {
     toast.success("Battle invite copied!");
   };
 
-  const handleStartSession = async () => {
+  // Bug Fix 1 (continued): removed startCamera() / setIsDetecting() from here.
+  // Camera is now started by the useEffect above that watches battleState.
+  const handleStartSession = () => {
     setCount(0);
     countRef.current = 0;
     motionStateRef.current = makeMotionState();
-    const ok = await startCamera();
-    if (ok) setIsDetecting(true);
     setBattleState("active");
   };
 
@@ -554,8 +581,7 @@ export default function BattlePage() {
       setCount(0);
       countRef.current = 0;
       motionStateRef.current = makeMotionState();
-      const ok = await startCamera();
-      if (ok) setIsDetecting(true);
+      // Bug Fix 1 (continued): only set state here; camera starts via useEffect
       setBattleState("active");
     } catch (err) {
       const msg = String(err).toLowerCase();
@@ -1008,6 +1034,7 @@ export default function BattlePage() {
                   type="button"
                   data-ocid="battle.mic.toggle"
                   onClick={() => setIsMuted((m) => !m)}
+                  title={isMuted ? "Tap to unmute" : "Tap to mute"}
                   className="flex items-center gap-2 px-4 py-2 rounded-full text-xs font-display font-bold transition-all duration-200"
                   style={
                     isMuted
@@ -1026,7 +1053,7 @@ export default function BattlePage() {
                   {isMuted ? (
                     <>
                       <MicOff className="w-4 h-4" />
-                      Mic Off
+                      Tap to Unmute
                     </>
                   ) : (
                     <>

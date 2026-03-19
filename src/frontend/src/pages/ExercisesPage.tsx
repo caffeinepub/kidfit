@@ -49,11 +49,11 @@ function getExerciseImage(name: string): string | null {
     n.includes("hammer curl") &&
     (n.includes("altern") || n.includes("alternating"))
   )
-    return "/assets/generated/exercise-hammer-curls-alt.dim_400x400.jpg";
+    return "/assets/generated/hammer-curls-alternating.dim_800x500.png";
   if (n.includes("bicep curl") && n.includes("both"))
     return "/assets/generated/exercise-bicep-curls-both.dim_400x400.jpg";
   if (n.includes("hammer curl") && n.includes("both"))
-    return "/assets/generated/exercise-hammer-curls-both.dim_400x400.jpg";
+    return "/assets/generated/hammer-curls-both-hands.dim_800x500.png";
   if (n.includes("chair dip"))
     return "/assets/generated/exercise-chair-dips.dim_400x400.jpg";
   if (n.includes("skull crusher"))
@@ -71,6 +71,8 @@ function getExerciseImage(name: string): string | null {
     return "/assets/generated/exercise-crucifix-crunches.dim_400x400.jpg";
   if (n.includes("hollow body"))
     return "/assets/generated/exercise-hollow-body-hold.dim_400x400.jpg";
+  if (n.includes("hanging leg raise"))
+    return "/assets/generated/exercise-hanging-leg-raises.dim_400x400.jpg";
   if (n.includes("leg raise"))
     return "/assets/generated/exercise-leg-raises.dim_400x400.jpg";
   if (n.includes("side plank"))
@@ -153,8 +155,6 @@ function getExerciseImage(name: string): string | null {
     return "/assets/generated/exercise-overhead-barbell-press.dim_400x400.jpg";
   if (n.includes("face pull"))
     return "/assets/generated/exercise-face-pulls.dim_400x400.jpg";
-  if (n.includes("hanging leg raise"))
-    return "/assets/generated/exercise-hanging-leg-raises.dim_400x400.jpg";
   if (n.includes("cable crunch"))
     return "/assets/generated/exercise-cable-crunch.dim_400x400.jpg";
   if (n.includes("decline sit"))
@@ -185,8 +185,507 @@ function getExerciseImage(name: string): string | null {
   if (n.includes("arm circle"))
     return "/assets/generated/exercise-arm-circles.dim_400x400.jpg";
   if (n.includes("hammer curl"))
-    return "/assets/generated/exercise-hammer-curls-alt.dim_400x400.jpg";
+    return "/assets/generated/hammer-curls-alternating.dim_800x500.png";
   return null;
+}
+
+function getExerciseInstructions(name: string): string[] {
+  const n = name.toLowerCase();
+  if (
+    n.includes("hammer curl") &&
+    (n.includes("altern") || n.includes("alternating"))
+  )
+    return [
+      "Stand upright, hold a dumbbell in each hand with palms facing inward (neutral grip, thumbs up)",
+      "Curl one arm up toward your shoulder while keeping the other straight",
+      "Lower slowly and alternate arms",
+      "Keep elbows pinned to your sides throughout",
+    ];
+  if (n.includes("hammer curl") && n.includes("both"))
+    return [
+      "Stand upright, hold a dumbbell in each hand with neutral grip (thumbs pointing up)",
+      "Curl BOTH dumbbells up toward your shoulders at the same time",
+      "Squeeze at the top, then lower slowly",
+      "Keep elbows pinned to sides — do not swing",
+    ];
+  if (n.includes("hammer curl"))
+    return [
+      "Stand upright, hold a dumbbell in each hand with neutral grip (thumbs pointing up)",
+      "Curl one arm up toward your shoulder while keeping the other straight",
+      "Lower slowly and alternate arms",
+      "Keep elbows pinned to your sides throughout",
+    ];
+  if (n.includes("leaning back row"))
+    return [
+      "Stand with feet shoulder-width apart and lean your upper body slightly backward (~20-30 degrees)",
+      "Hold dumbbells in both hands hanging in front of you",
+      "Pull both dumbbells up toward your hips in a rowing motion",
+      "Squeeze shoulder blades together at the top, lower slowly",
+    ];
+  if (n.includes("hanging leg raise"))
+    return [
+      "Hang from a pull-up bar with arms fully extended, grip slightly wider than shoulders",
+      "Keep your body straight and core tight",
+      "Raise both legs up until they are parallel to the floor (or higher)",
+      "Lower slowly — do not swing your body for momentum",
+    ];
+  if (n.includes("cable crunch"))
+    return [
+      "Kneel in front of the cable machine, grip the rope attachment with both hands at either side of your head",
+      "Keep hips stationary — do not sit back",
+      "Crunch your upper body downward toward your knees by contracting your abs",
+      "Slowly return to starting position while keeping tension on the cable",
+    ];
+  if (n.includes("donkey calf raise"))
+    return [
+      "Bend forward at the hips (~90 degrees) with hands resting on a bench or support",
+      "Keep legs straight and rise up onto the balls of your feet",
+      "Hold at the top for 1 second squeezing the calves",
+      "Lower slowly for full range of motion",
+    ];
+  if (n.includes("burpee"))
+    return [
+      "Start standing — drop your hands to the floor and jump both feet back to a push-up position",
+      "Perform one push-up (chest to floor)",
+      "Jump your feet forward toward your hands",
+      "Explosively jump up with arms raised overhead — that is one full rep",
+    ];
+  if (n.includes("jumping jack"))
+    return [
+      "Stand upright with feet together and arms at your sides",
+      "Jump feet out wide while raising arms overhead",
+      "Jump back to starting position",
+      "Maintain a steady rhythm throughout",
+    ];
+  if (n.includes("declined push"))
+    return [
+      "Place your feet on an elevated surface (chair or bench) with hands on the floor",
+      "Lower your chest toward the floor",
+      "Push back up keeping body straight",
+      "Targets upper chest and front shoulders",
+    ];
+  if (n.includes("inclined push"))
+    return [
+      "Place hands on an elevated surface (bench or chair)",
+      "Lower your chest toward the surface",
+      "Push back up",
+      "Easier variation — good for building foundational strength",
+    ];
+  if (n.includes("push up") || n.includes("push-up"))
+    return [
+      "Start in a high plank — hands slightly wider than shoulder-width",
+      "Lower your chest to the floor keeping body in a straight line",
+      "Push back up to starting position",
+      "Keep core tight — do not let hips sag",
+    ];
+  if (n.includes("alternate curl"))
+    return [
+      "Stand holding a dumbbell in each hand with palms facing forward",
+      "Curl one arm up toward your shoulder",
+      "Lower and repeat on the other side",
+      "Keep upper arms stationary — only forearms move",
+    ];
+  if (n.includes("bicep curl") && n.includes("both"))
+    return [
+      "Hold a dumbbell in each hand, palms facing forward",
+      "Curl both arms up toward your shoulders simultaneously",
+      "Squeeze biceps at the top",
+      "Lower slowly — full range of motion",
+    ];
+  if (n.includes("chair dip"))
+    return [
+      "Place hands on the edge of a chair behind you, legs extended",
+      "Lower your body by bending elbows to about 90 degrees",
+      "Push back up to starting position",
+      "Keep back close to the chair throughout",
+    ];
+  if (n.includes("skull crusher"))
+    return [
+      "Stand and hold one dumbbell overhead with both hands (or one in each hand)",
+      "Lower the weight behind your head by bending elbows",
+      "Extend arms back overhead, squeezing triceps",
+      "Keep upper arms close to head — only elbows move",
+    ];
+  if (n.includes("cobra"))
+    return [
+      "Lie face down with hands under shoulders",
+      "Press up lifting chest off floor, keeping hips down",
+      "Hold and breathe deeply",
+      "Stretches the lower back and abdomen",
+    ];
+  if (n.includes("cat cow"))
+    return [
+      "Start on hands and knees in tabletop position",
+      "Cow: drop belly toward floor, lift head and tailbone (inhale)",
+      "Cat: round spine toward ceiling, tuck chin to chest (exhale)",
+      "Flow between both smoothly with breath",
+    ];
+  if (n.includes("child") || n.includes("balasana"))
+    return [
+      "Kneel and sit back on heels, then fold forward stretching arms out",
+      "Rest forehead on the floor",
+      "Breathe deeply, relaxing the lower back and hips",
+      "Hold the stretch — do not force it",
+    ];
+  if (n.includes("crucifix"))
+    return [
+      "Lie on your back with arms extended out to sides like a cross",
+      "Lift one knee and rotate to touch the opposite hand",
+      "Alternate sides in a controlled motion",
+      "Keep shoulders on the floor as much as possible",
+    ];
+  if (n.includes("hollow body"))
+    return [
+      "Lie on your back and press lower back into the floor",
+      "Lift shoulders and legs off the floor keeping arms overhead or at sides",
+      "Hold the position with core braced",
+      "Do not let lower back arch off the floor",
+    ];
+  if (n.includes("side plank"))
+    return [
+      "Start in a side plank — one forearm on floor, body in straight line",
+      "Dip your hip to the floor, then raise back up",
+      "Keep core braced throughout",
+      "Complete all reps on one side before switching",
+    ];
+  if (n.includes("leg raise"))
+    return [
+      "Lie flat on your back with legs straight",
+      "Keep arms at sides and lower back pressed to floor",
+      "Raise legs to 90 degrees, lower slowly",
+      "Do not let legs touch the floor between reps",
+    ];
+  if (n.includes("leaning rear fly") || n.includes("leaning rear flye"))
+    return [
+      "Hinge forward at hips, dumbbells hanging in front of you",
+      "Raise both arms out to the sides with slight elbow bend",
+      "Squeeze rear deltoids at the top",
+      "Lower slowly — control the weight",
+    ];
+  if (
+    n.includes("rear delt fly") ||
+    n.includes("alternative rear") ||
+    n.includes("alt rear")
+  )
+    return [
+      "Hinge forward at hips, raise one arm out to the side at a time",
+      "Alternate sides, squeezing rear delt at the top",
+      "Keep torso still throughout",
+      "Light weight, focus on the squeeze",
+    ];
+  if (n.includes("front raise"))
+    return [
+      "Stand holding dumbbells in front of thighs, palms down",
+      "Raise arms straight in front of you to shoulder height",
+      "Lower slowly",
+      "Keep core tight — avoid using momentum",
+    ];
+  if (n.includes("lateral raise"))
+    return [
+      "Stand holding dumbbells at sides, palms facing inward",
+      "Raise arms out to sides to shoulder height",
+      "Lower slowly with control",
+      "Slight bend in elbows — do not shrug shoulders",
+    ];
+  if (n.includes("goblet squat"))
+    return [
+      "Hold a dumbbell vertically at chest height with both hands",
+      "Stand feet slightly wider than shoulder-width, toes turned out",
+      "Squat down keeping chest up and elbows inside knees",
+      "Drive through heels to return to standing",
+    ];
+  if (n.includes("sumo squat"))
+    return [
+      "Stand with feet wider than shoulder-width, toes pointed out",
+      "Hold a dumbbell in front for balance or hands at sides",
+      "Squat down keeping knees tracking over toes",
+      "Focus on inner thighs and glutes",
+    ];
+  if (n.includes("seated calf raise"))
+    return [
+      "Sit on bench with weight on thighs, balls of feet on edge",
+      "Lower heels toward floor for full stretch",
+      "Rise up on toes as high as possible",
+      "Keep movement slow and controlled",
+    ];
+  if (n.includes("standing calf raise"))
+    return [
+      "Stand with feet hip-width on a step edge (heels hanging off)",
+      "Rise onto balls of feet as high as possible",
+      "Lower heels below step level for full stretch",
+      "Slow and controlled movements",
+    ];
+  if (n.includes("calf raise"))
+    return [
+      "Stand with feet shoulder-width apart",
+      "Rise onto the balls of your feet as high as possible",
+      "Hold briefly at the top",
+      "Lower slowly for full stretch",
+    ];
+  if (n.includes("bulgarian split squat"))
+    return [
+      "Place rear foot elevated on bench, hold dumbbells at sides",
+      "Lower back knee toward floor",
+      "Front knee should stay over front foot",
+      "Push through front heel to return",
+    ];
+  if (n.includes("bulgarian"))
+    return [
+      "Place one foot elevated behind you on a bench or chair",
+      "Lower your back knee toward the floor in a lunge",
+      "Front knee stays over the front foot",
+      "Push through front heel to stand back up",
+    ];
+  if (n.includes("romanian deadlift"))
+    return [
+      "Hold dumbbells in front of thighs, slight bend in knees",
+      "Hinge at hips pushing them back, lower weights along legs",
+      "Feel the stretch in hamstrings at the bottom",
+      "Drive hips forward to return to standing",
+    ];
+  if (n.includes("barbell bench press"))
+    return [
+      "Lie on bench, grip bar slightly wider than shoulders",
+      "Lower bar to mid-chest with elbows at 45-75 degrees",
+      "Press bar up until arms are fully extended",
+      "Keep feet flat and back slightly arched",
+    ];
+  if (n.includes("incline dumbbell press"))
+    return [
+      "Sit on incline bench (30-45 degrees), dumbbells at shoulder height",
+      "Press both dumbbells up and slightly inward",
+      "Lower slowly to starting position",
+      "Targets upper chest",
+    ];
+  if (n.includes("cable fly"))
+    return [
+      "Stand centered between two cable machines with handles at chest height",
+      "Grip handles and bring arms forward in an arc motion",
+      "Squeeze chest at the peak of the movement",
+      "Slowly return to starting position",
+    ];
+  if (n.includes("dips") && !n.includes("chair"))
+    return [
+      "Grip parallel bars and hold yourself up with arms straight",
+      "Lower body by bending elbows until upper arms are parallel to floor",
+      "Press back up to starting position",
+      "Lean slightly forward to target chest",
+    ];
+  if (n.includes("incline dumbbell curl"))
+    return [
+      "Sit on incline bench, dumbbells hanging at sides",
+      "Curl both arms up, elbows stay behind torso",
+      "Greater stretch at bottom than standing curls",
+      "Lower slowly for full range of motion",
+    ];
+  if (n.includes("barbell curl"))
+    return [
+      "Stand with barbell, underhand grip shoulder-width",
+      "Curl bar up toward shoulders keeping elbows at sides",
+      "Squeeze at the top",
+      "Lower slowly",
+    ];
+  if (n.includes("close-grip bench") || n.includes("close grip bench"))
+    return [
+      "Grip barbell with hands about shoulder-width (narrower than bench press)",
+      "Lower bar to lower chest",
+      "Keep elbows close to body",
+      "Press up — targets triceps",
+    ];
+  if (n.includes("tricep rope") || n.includes("rope pushdown"))
+    return [
+      "Grip rope attachment on high cable with both hands",
+      "Keep elbows pinned at sides",
+      "Push rope down until arms fully extended, spreading rope slightly at bottom",
+      "Slowly return to starting position",
+    ];
+  if (n.includes("deadlift") && !n.includes("romanian"))
+    return [
+      "Stand with bar over feet, hip-width stance",
+      "Grip bar just outside legs, flat back",
+      "Push floor away and lift bar keeping it close to body",
+      "Lock hips at top — reverse movement to lower",
+    ];
+  if (n.includes("pull-up") || n.includes("pull up") || n.includes("pullup"))
+    return [
+      "Hang from bar with overhand grip, slightly wider than shoulders",
+      "Pull yourself up until chin clears the bar",
+      "Lower slowly with control",
+      "Dead hang at the bottom before each rep",
+    ];
+  if (n.includes("barbell row"))
+    return [
+      "Hinge forward holding barbell, back flat, looking down",
+      "Pull bar to lower chest/upper abs",
+      "Squeeze shoulder blades together",
+      "Lower slowly",
+    ];
+  if (n.includes("seated cable row"))
+    return [
+      "Sit at cable row machine, feet on platform, grab handle",
+      "Pull handle to your lower abs, squeezing shoulder blades",
+      "Keep back upright and core tight",
+      "Slowly extend arms back to starting position",
+    ];
+  if (n.includes("overhead barbell press"))
+    return [
+      "Stand with barbell at upper chest, grip shoulder-width",
+      "Press bar overhead until arms fully extended",
+      "Lower slowly to collarbone",
+      "Keep core braced throughout",
+    ];
+  if (n.includes("face pull"))
+    return [
+      "Attach rope to high cable, pull toward face splitting the rope",
+      "Elbows go out and back at shoulder height",
+      "Squeeze rear delts at the peak",
+      "Great for shoulder health and posture",
+    ];
+  if (n.includes("decline sit"))
+    return [
+      "Secure feet on decline bench, hands behind head or crossed on chest",
+      "Lower back toward the bench with control",
+      "Rise back up contracting abs",
+      "Do not pull on neck — use core",
+    ];
+  if (n.includes("plank hold"))
+    return [
+      "Hold push-up or forearm plank position",
+      "Body should form a straight line",
+      "Brace every muscle — core, glutes, quads",
+      "Focus on breathing — do not hold breath",
+    ];
+  if (n.includes("plank") && !n.includes("side"))
+    return [
+      "Hold a push-up position with arms straight or on forearms",
+      "Keep body in a straight line from head to heels",
+      "Brace core, glutes, and quads",
+      "Breathe steadily — do not hold breath",
+    ];
+  if (n.includes("standing calf raise"))
+    return [
+      "Stand with feet hip-width on a step edge (heels hanging off)",
+      "Rise onto balls of feet as high as possible",
+      "Lower heels below step level for full stretch",
+      "Slow and controlled movements",
+    ];
+  if (n.includes("hip thrust"))
+    return [
+      "Sit with upper back on bench, barbell over hips",
+      "Drive hips up by squeezing glutes until body is in a straight line",
+      "Hold at top for a second",
+      "Lower slowly — do not touch floor between reps",
+    ];
+  if (n.includes("glute bridge"))
+    return [
+      "Lie on back, knees bent, feet flat on floor",
+      "Drive hips up by squeezing glutes",
+      "Hold at top, then lower slowly",
+      "Keep core braced throughout",
+    ];
+  if (n.includes("cable kickback"))
+    return [
+      "Face cable machine, attach ankle strap, hinge slightly at hip",
+      "Kick leg straight back squeezing glute at the top",
+      "Lower slowly",
+      "Keep hips square — do not rotate",
+    ];
+  if (n.includes("back extension"))
+    return [
+      "Lie face down on a hyperextension bench or floor",
+      "Lower torso toward floor, then raise back to parallel",
+      "Squeeze lower back muscles at the top",
+      "Keep movement controlled — avoid hyperextending",
+    ];
+  if (n.includes("good morning"))
+    return [
+      "Stand with barbell on upper back or hands behind head",
+      "Hinge forward at hips keeping back flat",
+      "Lower until torso is near parallel to floor",
+      "Drive hips forward to return to standing",
+    ];
+  if (n.includes("arm circle"))
+    return [
+      "Extend arms out to sides",
+      "Make controlled circular motions",
+      "Reverse direction halfway through",
+      "Great shoulder warm-up",
+    ];
+  if (n.includes("mountain climber"))
+    return [
+      "Start in high plank position",
+      "Drive one knee toward chest, then quickly switch legs",
+      "Keep hips level and core tight",
+      "Maintain a steady pace",
+    ];
+  if (n.includes("jump squat"))
+    return [
+      "Stand feet shoulder-width, squat down halfway",
+      "Explode up jumping off the floor",
+      "Land softly with knees bent",
+      "Immediately go into the next rep",
+    ];
+  if (n.includes("high knee"))
+    return [
+      "Stand and run in place driving knees up to hip height",
+      "Pump arms in coordination with legs",
+      "Stay on the balls of your feet",
+      "Keep a fast steady rhythm",
+    ];
+  if (n.includes("downward dog"))
+    return [
+      "Start on hands and knees, push hips up and back",
+      "Straighten legs as much as comfortable, heels reach toward floor",
+      "Head between arms, spine long",
+      "Hold and breathe deeply",
+    ];
+  if (n.includes("warrior i") && !n.includes("warrior ii"))
+    return [
+      "Step one foot forward in a lunge, back foot angled 45 degrees",
+      "Bend front knee over ankle",
+      "Raise arms overhead, square hips forward",
+      "Hold and breathe",
+    ];
+  if (n.includes("warrior ii"))
+    return [
+      "Stand in a wide stance, front foot pointing forward, back foot 90 degrees",
+      "Bend front knee over ankle",
+      "Extend arms out to sides at shoulder height",
+      "Gaze over front hand",
+    ];
+  if (n.includes("tree pose"))
+    return [
+      "Stand on one leg, place the other foot on inner thigh or calf (not knee)",
+      "Bring hands to prayer at chest or raise overhead",
+      "Fix gaze on a still point for balance",
+      "Hold, then switch sides",
+    ];
+  if (n.includes("seated forward bend"))
+    return [
+      "Sit with legs extended straight",
+      "Hinge at hips reaching hands toward feet",
+      "Keep back as flat as possible",
+      "Hold and breathe — do not bounce",
+    ];
+  if (n.includes("savasana") || n.includes("corpse pose"))
+    return [
+      "Lie flat on back, arms at sides, palms up",
+      "Close eyes and relax every muscle",
+      "Breathe naturally",
+      "Full body recovery pose — hold for 1-2 minutes",
+    ];
+  if (n.includes("low back row"))
+    return [
+      "Hinge forward with a flat back, dumbbell in one hand",
+      "Pull the dumbbell up toward your hip",
+      "Keep elbow close to body throughout",
+      "Lower slowly, full stretch at bottom",
+    ];
+  return [
+    "Focus on controlled form over speed",
+    "Breathe steadily throughout",
+    "Rest if you feel sharp pain",
+  ];
 }
 
 // ─── Workout Plan Data ──────────────────────────────────────────────────────
@@ -256,7 +755,7 @@ const WORKOUT_PLANS: WorkoutPlan[] = [
       },
       { name: "Cobra Pose", type: "STRETCH", duration: 30 },
       { name: "Cat Cow Pose", type: "STRETCH", duration: 30 },
-      { name: "Tadasana (Mountain Pose)", type: "STRETCH", duration: 30 },
+      { name: "Child's Pose (Balasana)", type: "STRETCH", duration: 30 },
     ],
   },
   {
@@ -290,7 +789,7 @@ const WORKOUT_PLANS: WorkoutPlan[] = [
       },
       { name: "Cobra Pose", type: "STRETCH", duration: 30 },
       { name: "Cat Cow Pose", type: "STRETCH", duration: 30 },
-      { name: "Tadasana (Mountain Pose)", type: "STRETCH", duration: 30 },
+      { name: "Child's Pose (Balasana)", type: "STRETCH", duration: 30 },
     ],
   },
   {
@@ -330,7 +829,7 @@ const WORKOUT_PLANS: WorkoutPlan[] = [
       { name: "Lateral Raises", type: "STRENGTH", sets: 2, reps: "6–8 reps" },
       { name: "Cobra Pose", type: "STRETCH", duration: 30 },
       { name: "Cat Cow Pose", type: "STRETCH", duration: 30 },
-      { name: "Tadasana (Mountain Pose)", type: "STRETCH", duration: 30 },
+      { name: "Child's Pose (Balasana)", type: "STRETCH", duration: 30 },
     ],
   },
   {
@@ -366,7 +865,7 @@ const WORKOUT_PLANS: WorkoutPlan[] = [
       },
       { name: "Cobra Pose", type: "STRETCH", duration: 30 },
       { name: "Cat Cow Pose", type: "STRETCH", duration: 30 },
-      { name: "Tadasana (Mountain Pose)", type: "STRETCH", duration: 30 },
+      { name: "Child's Pose (Balasana)", type: "STRETCH", duration: 30 },
     ],
   },
 ];
@@ -421,7 +920,7 @@ const GYM_PLANS: WorkoutPlan[] = [
       { name: "Skull Crushers", type: "STRENGTH", sets: 2, reps: "8–10 reps" },
       { name: "Cobra Pose", type: "STRETCH", duration: 30 },
       { name: "Cat Cow Pose", type: "STRETCH", duration: 30 },
-      { name: "Tadasana (Mountain Pose)", type: "STRETCH", duration: 30 },
+      { name: "Child's Pose (Balasana)", type: "STRETCH", duration: 30 },
     ],
   },
   {
@@ -460,7 +959,7 @@ const GYM_PLANS: WorkoutPlan[] = [
       { name: "Face Pulls", type: "STRENGTH", sets: 2, reps: "8–10 reps" },
       { name: "Cobra Pose", type: "STRETCH", duration: 30 },
       { name: "Cat Cow Pose", type: "STRETCH", duration: 30 },
-      { name: "Tadasana (Mountain Pose)", type: "STRETCH", duration: 30 },
+      { name: "Child's Pose (Balasana)", type: "STRETCH", duration: 30 },
     ],
   },
   {
@@ -502,7 +1001,7 @@ const GYM_PLANS: WorkoutPlan[] = [
       },
       { name: "Cobra Pose", type: "STRETCH", duration: 30 },
       { name: "Cat Cow Pose", type: "STRETCH", duration: 30 },
-      { name: "Tadasana (Mountain Pose)", type: "STRETCH", duration: 30 },
+      { name: "Child's Pose (Balasana)", type: "STRETCH", duration: 30 },
     ],
   },
   {
@@ -556,7 +1055,7 @@ const GYM_PLANS: WorkoutPlan[] = [
       { name: "Good Mornings", type: "STRENGTH", sets: 2, reps: "8–10 reps" },
       { name: "Cobra Pose", type: "STRETCH", duration: 30 },
       { name: "Cat Cow Pose", type: "STRETCH", duration: 30 },
-      { name: "Tadasana (Mountain Pose)", type: "STRETCH", duration: 30 },
+      { name: "Child's Pose (Balasana)", type: "STRETCH", duration: 30 },
     ],
   },
 ];
@@ -580,7 +1079,7 @@ const FAT_LOSS_PLANS: WorkoutPlan[] = [
       { name: "Jumping Jacks", type: "WARMUP", duration: 60 },
       { name: "Cobra Pose", type: "STRETCH", duration: 30 },
       { name: "Cat Cow Pose", type: "STRETCH", duration: 30 },
-      { name: "Tadasana (Mountain Pose)", type: "STRETCH", duration: 30 },
+      { name: "Child's Pose (Balasana)", type: "STRETCH", duration: 30 },
     ],
   },
 ];
@@ -595,7 +1094,7 @@ const YOGA_PLANS: WorkoutPlan[] = [
       "Hold each pose with steady breathing. Great for flexibility and mental calm.",
     category: "yoga",
     exercises: [
-      { name: "Mountain Pose (Tadasana)", type: "STRETCH", duration: 60 },
+      { name: "Child's Pose (Balasana)", type: "STRETCH", duration: 60 },
       {
         name: "Downward Dog (Adho Mukha Svanasana)",
         type: "STRETCH",
@@ -973,17 +1472,11 @@ function WorkoutOverlay({
               {step.kind === "rest" && (
                 <>
                   <span
-                    className="text-3xl font-display font-black tracking-widest"
+                    className="text-2xl font-display font-black tracking-wide"
                     style={{ color: "#D4AF37" }}
                   >
-                    REST
+                    Rest Time — 30 seconds
                   </span>
-                  <p
-                    className="text-sm font-body font-bold"
-                    style={{ color: "#D4AF37", opacity: 0.8 }}
-                  >
-                    30 seconds
-                  </p>
                   <CircleTimer
                     seconds={seconds}
                     R={R}
@@ -1029,6 +1522,45 @@ function WorkoutOverlay({
                   <h2 className="text-white font-display font-black text-3xl text-center leading-tight">
                     {step.exercise.name}
                   </h2>
+                  {/* Instructions */}
+                  {(() => {
+                    const instrs = getExerciseInstructions(step.exercise.name);
+                    return (
+                      <div
+                        className="w-full rounded-xl px-4 py-3"
+                        style={{
+                          background: "rgba(20,20,20,0.85)",
+                          borderLeft: "3px solid #D4AF37",
+                          border: "1px solid rgba(212,175,55,0.2)",
+                          borderLeftWidth: "3px",
+                          borderLeftColor: "#D4AF37",
+                        }}
+                      >
+                        <p
+                          className="text-xs font-display font-bold uppercase tracking-widest mb-2"
+                          style={{ color: "#D4AF37" }}
+                        >
+                          How to do it
+                        </p>
+                        <ol className="flex flex-col gap-1">
+                          {instrs.map((instr, i) => (
+                            <li
+                              key={`instr-${i}-${instr.slice(0, 10)}`}
+                              className="flex gap-2 text-xs font-body text-white/75 leading-snug"
+                            >
+                              <span
+                                className="font-bold shrink-0"
+                                style={{ color: "#D4AF37" }}
+                              >
+                                {i + 1}.
+                              </span>
+                              <span>{instr}</span>
+                            </li>
+                          ))}
+                        </ol>
+                      </div>
+                    );
+                  })()}
                   <CircleTimer
                     seconds={seconds}
                     R={R}
@@ -1115,6 +1647,45 @@ function WorkoutOverlay({
                   <h2 className="text-white font-display font-black text-3xl text-center leading-tight">
                     {step.exercise.name}
                   </h2>
+                  {/* Instructions */}
+                  {(() => {
+                    const instrs = getExerciseInstructions(step.exercise.name);
+                    return (
+                      <div
+                        className="w-full rounded-xl px-4 py-3"
+                        style={{
+                          background: "rgba(20,20,20,0.85)",
+                          borderLeft: "3px solid #D4AF37",
+                          border: "1px solid rgba(212,175,55,0.2)",
+                          borderLeftWidth: "3px",
+                          borderLeftColor: "#D4AF37",
+                        }}
+                      >
+                        <p
+                          className="text-xs font-display font-bold uppercase tracking-widest mb-2"
+                          style={{ color: "#D4AF37" }}
+                        >
+                          How to do it
+                        </p>
+                        <ol className="flex flex-col gap-1">
+                          {instrs.map((instr, i) => (
+                            <li
+                              key={`instr-${i}-${instr.slice(0, 10)}`}
+                              className="flex gap-2 text-xs font-body text-white/75 leading-snug"
+                            >
+                              <span
+                                className="font-bold shrink-0"
+                                style={{ color: "#D4AF37" }}
+                              >
+                                {i + 1}.
+                              </span>
+                              <span>{instr}</span>
+                            </li>
+                          ))}
+                        </ol>
+                      </div>
+                    );
+                  })()}
                   <div
                     className="rounded-2xl px-8 py-5 text-center"
                     style={{
