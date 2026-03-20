@@ -1,24 +1,19 @@
 import { useEffect, useRef } from "react";
 import { useCanSeeAd, useRecordAdView } from "../hooks/useQueries";
-import { useUserProfile } from "../hooks/useQueries";
 
 export default function AdBanner() {
-  const { data: profile } = useUserProfile();
   const { data: canSeeAd } = useCanSeeAd();
   const { mutate: recordAdView } = useRecordAdView();
   const hasRecordedRef = useRef(false);
 
-  const now = BigInt(Date.now()) * BigInt(1_000_000);
-  const isAdFree = profile?.adFreeUntil ? profile.adFreeUntil > now : false;
-
   useEffect(() => {
-    if (canSeeAd && !hasRecordedRef.current && !isAdFree) {
+    if (canSeeAd && !hasRecordedRef.current) {
       hasRecordedRef.current = true;
       recordAdView();
     }
-  }, [canSeeAd, isAdFree, recordAdView]);
+  }, [canSeeAd, recordAdView]);
 
-  if (isAdFree || !canSeeAd) return null;
+  if (!canSeeAd) return null;
 
   return (
     <div

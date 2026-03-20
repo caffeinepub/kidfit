@@ -1,14 +1,14 @@
+import type { Principal } from "@icp-sdk/core/principal";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   Battle,
   BattleChatMessage,
   Exercise,
   ExerciseCategory,
-  LeaderboardEntry,
   TournamentEntry,
-  UserProfile,
   WorkoutPlan,
-} from "../backend.d";
+} from "../backend";
+import type { StreakData, UserProfile } from "../backend.d";
 import { useActor } from "./useActor";
 
 function getErrText(err: unknown): string {
@@ -28,11 +28,10 @@ export function useUserProfile() {
     queryKey: ["userProfile"],
     queryFn: async () => {
       if (!actor) return null;
-      const result = await actor.getCallerUserProfile();
-      if (Array.isArray(result)) {
-        return result.length > 0 ? (result[0] as UserProfile) : null;
-      }
-      return (result as UserProfile) ?? null;
+      const result = await (
+        actor as unknown as { getMyProfile(): Promise<UserProfile | null> }
+      ).getMyProfile();
+      return result ?? null;
     },
     enabled: isEnabled,
   });
@@ -59,9 +58,7 @@ export function useRegisterUser() {
       queryClient.setQueryData(["userProfile"], {
         username,
         xp: BigInt(0),
-        level: BigInt(1),
-        tier: { bronze: null },
-        adFreeUntil: BigInt(0),
+        joinedAt: BigInt(Date.now()),
       });
       queryClient.invalidateQueries({ queryKey: ["userProfile"] });
     },
@@ -74,7 +71,11 @@ export function useSaveProfile() {
   return useMutation({
     mutationFn: async (profile: UserProfile) => {
       if (!actor) throw new Error("No actor");
-      await actor.saveCallerUserProfile(profile);
+      await (
+        actor as unknown as {
+          saveCallerUserProfile(p: UserProfile): Promise<void>;
+        }
+      ).saveCallerUserProfile(profile);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["userProfile"] });
@@ -89,7 +90,7 @@ export function useCanSeeAd() {
     queryKey: ["canSeeAd"],
     queryFn: async () => {
       if (!actor) return false;
-      return actor.canSeeAd();
+      return (actor as unknown as { canSeeAd(): Promise<boolean> }).canSeeAd();
     },
     enabled: !!actor && !isFetching,
     refetchInterval: 30 * 60 * 1000,
@@ -102,7 +103,9 @@ export function useRecordAdView() {
   return useMutation({
     mutationFn: async () => {
       if (!actor) throw new Error("No actor");
-      await actor.recordAdView();
+      await (
+        actor as unknown as { recordAdView(): Promise<void> }
+      ).recordAdView();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["canSeeAd"] });
@@ -282,7 +285,9 @@ export function useUserRole() {
     queryKey: ["userRole"],
     queryFn: async () => {
       if (!actor) return null;
-      return actor.getCallerUserRole();
+      return (
+        actor as unknown as { getCallerUserRole(): Promise<string | null> }
+      ).getCallerUserRole();
     },
     enabled: !!actor && !isFetching,
   });
@@ -293,7 +298,7 @@ export function useAddExerciseCategory() {
   const { actor } = useActor();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (category: import("../backend.d").ExerciseCategory) => {
+    mutationFn: async (category: import("../backend").ExerciseCategory) => {
       if (!actor) throw new Error("No actor");
       await actor.addExerciseCategory(category);
     },
@@ -307,7 +312,7 @@ export function useAddExercise() {
   const { actor } = useActor();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (exercise: import("../backend.d").Exercise) => {
+    mutationFn: async (exercise: import("../backend").Exercise) => {
       if (!actor) throw new Error("No actor");
       await actor.addExercise(exercise);
     },
@@ -353,17 +358,92 @@ export function useFinalizeTournament() {
 // ===== GLOBAL LEADERBOARD =====
 export function useLeaderboard() {
   const { actor, isFetching } = useActor();
-  return useQuery<LeaderboardEntry[]>({
+  return useQuery<UserProfile[]>({
     queryKey: ["globalLeaderboard"],
     queryFn: async () => {
       if (!actor) return [];
       try {
         const result = await (
-          actor as unknown as {
-            getLeaderboard: () => Promise<LeaderboardEntry[]>;
-          }
+          actor as unknown as { getLeaderboard(): Promise<UserProfile[]> }
         ).getLeaderboard();
-        return result as LeaderboardEntry[];
+        return result as UserProfile[];
+      } catch {
+        return [];
+      }
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
+
+// ===== STREAKS =====
+export function useMyStreak() {
+  const { actor, isFetching } = useActor();
+  return useQuery<StreakData | null>({
+    queryKey: ["myStreak"],
+    queryFn: async () => {
+      if (!actor) return null;
+      try {
+        return await (
+          actor as unknown as { getMyStreak(): Promise<StreakData> }
+        ).getMyStreak();
+      } catch {
+        return null;
+      }
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
+
+// ===== FRIENDS =====
+export function useMyFriends() {
+  const { actor, isFetching } = useActor();
+  return useQuery<Principal[]>({
+    queryKey: ["myFriends"],
+    queryFn: async () => {
+      if (!actor) return [];
+      try {
+        return await (
+          actor as unknown as { getMyFriends(): Promise<Principal[]> }
+        ).getMyFriends();
+      } catch {
+        return [];
+      }
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
+
+export function useMyFriendRequests() {
+  const { actor, isFetching } = useActor();
+  return useQuery<Principal[]>({
+    queryKey: ["myFriendRequests"],
+    queryFn: async () => {
+      if (!actor) return [];
+      try {
+        return await (
+          actor as unknown as { getMyFriendRequests(): Promise<Principal[]> }
+        ).getMyFriendRequests();
+      } catch {
+        return [];
+      }
+    },
+    enabled: !!actor && !isFetching,
+    refetchInterval: 10000,
+  });
+}
+
+export function useFriendsLeaderboard() {
+  const { actor, isFetching } = useActor();
+  return useQuery<UserProfile[]>({
+    queryKey: ["friendsLeaderboard"],
+    queryFn: async () => {
+      if (!actor) return [];
+      try {
+        return await (
+          actor as unknown as {
+            getFriendsLeaderboard(): Promise<UserProfile[]>;
+          }
+        ).getFriendsLeaderboard();
       } catch {
         return [];
       }
@@ -445,7 +525,6 @@ export function useSendBattleChat() {
       return { code };
     },
     onSuccess: (_data, variables) => {
-      // Immediately refresh the chat so the sender sees their own message
       queryClient.invalidateQueries({
         queryKey: ["battleChats", variables.code],
       });

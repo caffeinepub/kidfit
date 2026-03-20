@@ -24,8 +24,8 @@ import {
 import { motion } from "motion/react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Difficulty, UserRole } from "../backend.d";
-import type { WorkoutExercise } from "../backend.d";
+import { Difficulty, UserRole } from "../backend";
+import type { WorkoutExercise } from "../backend";
 import {
   DEMO_FREE_TOURNAMENTS,
   DEMO_PAID_TOURNAMENTS,

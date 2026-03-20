@@ -20,7 +20,7 @@ import {
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Variant_active_finished_waiting } from "../backend.d";
+import { Variant_active_finished_waiting } from "../backend";
 import { useCamera } from "../camera/useCamera";
 import ShareResultModal from "../components/ShareResultModal";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
@@ -248,6 +248,8 @@ export default function BattlePage() {
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
   const [isMuted, setIsMuted] = useState(true);
+  const [_cameraError, setCameraError] = useState(false);
+  const [cameraRetryKey, setCameraRetryKey] = useState(0);
 
   const createBattle = useCreateBattle();
   const joinBattle = useJoinBattle();
@@ -380,17 +382,23 @@ export default function BattlePage() {
   // biome-ignore lint/correctness/useExhaustiveDependencies: startCamera is stable; adding it would cause re-trigger loops
   useEffect(() => {
     if (battleState !== "active") return;
+    setCameraError(false);
     let cancelled = false;
     const timer = setTimeout(async () => {
       if (cancelled) return;
       const ok = await startCamera();
-      if (!cancelled && ok) setIsDetecting(true);
-    }, 150); // wait for the <video> element to mount
+      if (cancelled) return;
+      if (ok) {
+        setIsDetecting(true);
+      } else {
+        setCameraError(true);
+      }
+    }, 600); // increased from 150ms to give DOM more time to mount
     return () => {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [battleState]); // intentionally omit startCamera to avoid re-trigger loops
+  }, [battleState, cameraRetryKey]); // cameraRetryKey allows manual retry
 
   // ── Mic management ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -927,9 +935,24 @@ export default function BattlePage() {
                       {error ? (
                         <div className="text-center">
                           <AlertCircle className="w-10 h-10 text-muted-foreground mx-auto mb-2" />
-                          <p className="text-xs text-muted-foreground font-body px-4">
+                          <p className="text-xs text-muted-foreground font-body px-4 mb-2">
                             Camera unavailable
                           </p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCameraError(false);
+                              setCameraRetryKey((k) => k + 1);
+                            }}
+                            className="text-xs font-display font-bold px-3 py-1.5 rounded-full"
+                            style={{
+                              background: "rgba(212,175,55,0.2)",
+                              border: "1px solid rgba(212,175,55,0.5)",
+                              color: "#D4AF37",
+                            }}
+                          >
+                            🔄 Retry Camera
+                          </button>
                         </div>
                       ) : (
                         <RefreshCw className="w-8 h-8 text-neon-green animate-spin" />
@@ -1052,16 +1075,17 @@ export default function BattlePage() {
                 >
                   {isMuted ? (
                     <>
-                      <MicOff className="w-4 h-4" />
-                      Tap to Unmute
+                      <MicOff className="w-4 h-4" />🎤 Unmute My Mic
                     </>
                   ) : (
                     <>
-                      <Mic className="w-4 h-4" />
-                      Mic On
+                      <Mic className="w-4 h-4" />🎤 Mic On (You)
                     </>
                   )}
                 </button>
+                <p className="text-white/30 text-xs text-center mt-1">
+                  Controls your own mic only
+                </p>
               </div>
 
               {/* ===== CHAT PANEL ===== */}

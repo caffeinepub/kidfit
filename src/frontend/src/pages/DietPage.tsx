@@ -21,7 +21,7 @@ import { Apple, Crown, Eye, Loader2, Lock, Plus, Trash2 } from "lucide-react";
 import { motion } from "motion/react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { UserRole } from "../backend.d";
+import { UserRole } from "../backend";
 import { useActor } from "../hooks/useActor";
 import { useCreateCheckoutSession, useUserRole } from "../hooks/useQueries";
 

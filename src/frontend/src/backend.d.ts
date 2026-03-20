@@ -7,124 +7,19 @@ export interface None {
     __kind__: "None";
 }
 export type Option<T> = Some<T> | None;
-export interface Exercise {
-    id: bigint;
-    difficulty: Difficulty;
-    name: string;
-    description: string;
-    targetReps: bigint;
-    category: string;
-}
-export interface LeaderboardEntry {
-    xp: bigint;
-    username: string;
-    tier: Tier;
-    user: Principal;
-    level: bigint;
-}
-export interface TransformationOutput {
-    status: bigint;
-    body: Uint8Array;
-    headers: Array<http_header>;
-}
-export type Time = bigint;
-export interface ExerciseCategory {
-    name: string;
-    description: string;
-}
-export interface http_header {
-    value: string;
-    name: string;
-}
-export interface http_request_result {
-    status: bigint;
-    body: Uint8Array;
-    headers: Array<http_header>;
-}
-export interface TournamentEntry {
-    userId: Principal;
-    timestamp: Time;
-    tournamentId: bigint;
-    pushupCount: bigint;
-}
-export interface ShoppingItem {
-    productName: string;
-    currency: string;
-    quantity: bigint;
-    priceInCents: bigint;
-    productDescription: string;
-}
-export interface TransformationInput {
-    context: Uint8Array;
-    response: http_request_result;
-}
-export interface DietEntry {
-    id: bigint;
-    fat: bigint;
-    carbs: bigint;
-    calories: bigint;
-    name: string;
-    category: string;
-    protein: bigint;
-}
-export type StripeSessionStatus = {
-    __kind__: "completed";
-    completed: {
-        userPrincipal?: string;
-        response: string;
-    };
-} | {
-    __kind__: "failed";
-    failed: {
-        error: string;
-    };
-};
-export interface StripeConfiguration {
-    allowedCountries: Array<string>;
-    secretKey: string;
-}
-export interface WorkoutSession {
-    userId: string;
-    exerciseId: bigint;
-    reps: bigint;
-    timestamp: bigint;
-}
-export interface WorkoutExercise {
-    name: string;
-    sets: bigint;
-    reps: bigint;
-    notes: string;
-}
-export interface WorkoutPlan {
-    id: bigint;
-    dayLabel: string;
-    description: string;
-    exercises: Array<WorkoutExercise>;
-}
-export interface Battle {
-    status: Variant_active_finished_waiting;
-    creator: Principal;
-    expiresAt: Time;
-    creatorScore: bigint;
-    code: string;
-    challengerScore: bigint;
-    challenger?: Principal;
-}
-export interface BattleChatMessage {
-    id: bigint;
-    battleCode: string;
-    sender: Principal;
-    senderUsername: string;
-    text: string;
-    timestamp: Time;
-}
+
 export interface UserProfile {
-    xp: bigint;
-    adFreeUntil: Time;
+    id: Principal;
     username: string;
-    tier: Tier;
-    level: bigint;
+    xp: bigint;
+    joinedAt: bigint;
 }
+
+export interface StreakData {
+    currentStreak: bigint;
+    lastActiveDate: string;
+}
+
 export interface AvatarData {
     skinTone: string;
     hair: string;
@@ -133,86 +28,54 @@ export interface AvatarData {
     outfit: string;
     accessory: string;
 }
+
 export interface WorkoutReward {
     xpGained: bigint;
     coinsGained: bigint;
 }
-export enum Difficulty {
-    easy = "easy",
-    hard = "hard",
-    medium = "medium"
-}
-export enum Tier {
-    bronze = "bronze",
-    gold = "gold",
-    diamond = "diamond",
-    platinum = "platinum",
-    silver = "silver"
-}
-export enum UserRole {
-    admin = "admin",
-    user = "user",
-    guest = "guest"
-}
-export enum Variant_active_finished_waiting {
-    active = "active",
-    finished = "finished",
-    waiting = "waiting"
-}
+
 export interface backendInterface {
-    addWorkoutPlan(plan: WorkoutPlan): Promise<bigint>;
-    deleteWorkoutPlan(id: bigint): Promise<void>;
-    getWorkoutPlans(): Promise<Array<WorkoutPlan>>;
-    getWorkoutSessions(): Promise<Array<WorkoutSession>>;
-    addDietEntry(entry: DietEntry): Promise<void>;
-    addExercise(exercise: Exercise): Promise<void>;
-    addExerciseCategory(category: ExerciseCategory): Promise<void>;
-    addXp(user: Principal, xp: bigint): Promise<void>;
-    assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
-    canSeeAd(): Promise<boolean>;
-    claimAdminRole(token: string): Promise<void>;
-    createBattle(code: string): Promise<void>;
-    createCheckoutSession(items: Array<ShoppingItem>, successUrl: string, cancelUrl: string): Promise<string>;
-    createTournament(name: string, startDate: Time, endDate: Time, entryFee: bigint, isPaid: boolean): Promise<bigint>;
-    enterTournament(tournamentId: bigint): Promise<void>;
-    finalizeTournament(tournamentId: bigint): Promise<void>;
-    getBattle(code: string): Promise<Battle | null>;
-    getBattleChats(code: string): Promise<Array<BattleChatMessage>>;
-    getCallerUserProfile(): Promise<UserProfile | null>;
-    getCallerUserRole(): Promise<UserRole>;
-    getCategories(): Promise<Array<ExerciseCategory>>;
-    getDietEntries(): Promise<Array<DietEntry>>;
-    getDietEntriesByCategory(category: string): Promise<Array<DietEntry>>;
-    getExercisesByCategory(category: string): Promise<Array<Exercise>>;
-    getLeaderboard(): Promise<Array<LeaderboardEntry>>;
-    getProfile(user: Principal): Promise<UserProfile>;
-    getStripeSessionStatus(sessionId: string): Promise<StripeSessionStatus>;
-    getTournamentLeaderboard(tournamentId: bigint): Promise<Array<TournamentEntry>>;
-    getUserProfile(user: Principal): Promise<UserProfile | null>;
-    isCallerAdmin(): Promise<boolean>;
-    isStripeConfigured(): Promise<boolean>;
-    joinBattle(code: string): Promise<void>;
-    logPushups(count: bigint): Promise<void>;
-    logWorkoutSession(exerciseId: bigint, reps: bigint): Promise<void>;
-    recordAdView(): Promise<void>;
-    registerUser(username: string): Promise<void>;
-    saveCallerUserProfile(profile: UserProfile): Promise<void>;
-    sendBattleChat(code: string, text: string): Promise<void>;
-    setStripeConfiguration(config: StripeConfiguration): Promise<void>;
-    submitTournamentScore(tournamentId: bigint, pushupCount: bigint): Promise<void>;
-    transform(input: TransformationInput): Promise<TransformationOutput>;
-    updateMyBattleScore(code: string, score: bigint): Promise<void>;
-    // Stage B: Coins
+    // Core user
+    registerUser(username: string): Promise<{ ok: UserProfile } | { err: string }>;
+    getMyProfile(): Promise<UserProfile | null>;
+    addXP(amount: bigint): Promise<UserProfile | null>;
+
+    // Missions
+    completeMission(missionId: string, date: string): Promise<{ ok: UserProfile } | { err: string }>;
+    hasMissionCompleted(missionId: string, date: string): Promise<boolean>;
+
+    // Leaderboard
+    getLeaderboard(): Promise<Array<UserProfile>>;
+
+    // Search
+    searchUserByUsername(username: string): Promise<UserProfile | null>;
+
+    // Streaks
+    updateStreak(date: string): Promise<bigint>;
+    getMyStreak(): Promise<StreakData>;
+
+    // Friends
+    sendFriendRequest(to: Principal): Promise<{ ok: null } | { err: string }>;
+    acceptFriendRequest(from: Principal): Promise<{ ok: null } | { err: string }>;
+    declineFriendRequest(from: Principal): Promise<{ ok: null } | { err: string }>;
+    getMyFriendRequests(): Promise<Array<Principal>>;
+    getMyFriends(): Promise<Array<Principal>>;
+    getFriendsLeaderboard(): Promise<Array<UserProfile>>;
+
+    // Coins & Workout
     getMyCoins(): Promise<bigint>;
     completeWorkout(): Promise<WorkoutReward>;
     addBonusCoins(amount: bigint): Promise<bigint>;
-    // Stage B: Avatar Shop
+
+    // Avatar Shop
     getMyOwnedItems(): Promise<Array<string>>;
     purchaseAvatarItem(itemId: string): Promise<{ ok: bigint } | { err: string }>;
-    // Stage B: Avatar Customization
+
+    // Avatar Customization
     getMyAvatar(): Promise<AvatarData | null>;
     saveAvatarCustomization(skinTone: string, hair: string, hairColor: string, face: string, outfit: string, accessory: string): Promise<void>;
-    // Stage B: Premium
+
+    // Premium
     isPremiumActive(): Promise<boolean>;
     getPremiumUntil(): Promise<bigint>;
     activatePremium(): Promise<bigint>;

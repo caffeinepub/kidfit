@@ -1,4 +1,11 @@
-import { Tier } from "../backend.d";
+// Tier enum defined here since it's no longer in backend.d.ts
+export enum Tier {
+  bronze = "bronze",
+  silver = "silver",
+  gold = "gold",
+  platinum = "platinum",
+  diamond = "diamond",
+}
 
 export interface TierInfo {
   tier: Tier;

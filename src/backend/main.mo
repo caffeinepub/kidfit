@@ -1,21 +1,18 @@
 import Array "mo:core/Array";
 import List "mo:core/List";
 import Map "mo:core/Map";
-import Iter "mo:core/Iter";
 import Text "mo:core/Text";
 import Nat "mo:core/Nat";
 import Time "mo:core/Time";
 import Int "mo:core/Int";
-import Principal "mo:core/Principal";
+import Iter "mo:core/Iter";
 import Order "mo:core/Order";
+import Principal "mo:core/Principal";
+import Runtime "mo:core/Runtime";
 import Authorization "authorization/access-control";
 import MixinAuthorization "authorization/MixinAuthorization";
 import Stripe "stripe/stripe";
 import OutCall "http-outcalls/outcall";
-import Runtime "mo:core/Runtime";
-
-
-// Battle type definition and migration applied via `with` clause
 
 actor {
   // Enums
@@ -79,7 +76,6 @@ actor {
     fat : Nat;
   };
 
-
   public type WorkoutExercise = {
     name : Text;
     sets : Nat;
@@ -113,6 +109,17 @@ actor {
     timestamp : Time.Time;
   };
 
+  public type StreakData = {
+    lastActiveDate : Text;
+    currentStreak : Nat;
+  };
+
+  public type FriendRequest = {
+    from : Principal;
+    to : Principal;
+    timestamp : Time.Time;
+  };
+
   // Persistent State
   let profiles = Map.empty<Principal, UserProfile>();
   let exerciseCategories = Map.empty<Text, ExerciseCategory>();
@@ -131,6 +138,11 @@ actor {
   var nextDietEntryId = 0;
   var nextChatId = 0;
 
+  // Streaks and Friends State
+  let dailyStreaks = Map.empty<Principal, StreakData>();
+  let pendingFriendRequests = Map.empty<Principal, List.List<Principal>>();
+  let friends = Map.empty<Principal, List.List<Principal>>();
+
   // Authorization and Stripe Config
   let accessControlState = Authorization.initState();
   var stripeConfig : ?Stripe.StripeConfiguration = null;
@@ -144,9 +156,22 @@ actor {
     };
   };
 
+  // *** Helper Functions ***
+  func getTierXpScaling(tier : Tier) : { workout : Nat; mission : Nat } {
+    switch (tier) {
+      case (#bronze) { { workout = 50; mission = 40 } };
+      case (#silver) { { workout = 70; mission = 50 } };
+      case (#gold) { { workout = 90; mission = 60 } };
+      case (#platinum) { { workout = 110; mission = 70 } };
+      case (#diamond) { { workout = 130; mission = 80 } };
+    };
+  };
+
   // *** User Profile Management ***
   public shared ({ caller }) func registerUser(username : Text) : async () {
-    if (profiles.containsKey(caller)) { Runtime.trap("This user is already registered.") };
+    if (profiles.containsKey(caller)) {
+      Runtime.trap("This user is already registered.");
+    };
     let profile : UserProfile = {
       username;
       xp = 0;
@@ -155,8 +180,6 @@ actor {
       adFreeUntil = 0;
     };
     profiles.add(caller, profile);
-    // DIRECTLY ADD ROLE FOR INITIAL REGISTRATION!
-    accessControlState.userRoles.add(caller, #user);
   };
 
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
@@ -365,14 +388,14 @@ actor {
   };
 
   public query ({ caller }) func getWorkoutSessions() : async [WorkoutSession] {
+    if (not (Authorization.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can view workout sessions");
+    };
     switch (workoutSessions.get(caller)) {
       case (null) { [] };
       case (?sessions) { sessions.toArray() };
     };
   };
-
-  // *** Workout Plans ***
-
 
   // *** Workout Plans ***
   public shared ({ caller }) func addWorkoutPlan(plan : WorkoutPlan) : async Nat {
@@ -395,11 +418,41 @@ actor {
     if (not (Authorization.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can delete workout plans");
     };
-    ignore workoutPlans.remove(id);
+    workoutPlans.remove(id);
   };
 
   public query func getWorkoutPlans() : async [WorkoutPlan] {
     workoutPlans.values().toArray();
+  };
+
+  // *** Complete Workout with Tier-based XP ***
+  public shared ({ caller }) func completeWorkout() : async { xpGained : Nat } {
+    if (not (Authorization.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can complete workouts");
+    };
+    let profile = switch (profiles.get(caller)) {
+      case (null) { Runtime.trap("User not found") };
+      case (?p) { p };
+    };
+    let scaling = getTierXpScaling(profile.tier);
+    let xpGain = scaling.workout;
+    await awardXp(caller, xpGain);
+    { xpGained = xpGain };
+  };
+
+  // *** Complete Mission with Tier-based XP ***
+  public shared ({ caller }) func completeMission(missionId : Text) : async { xpGained : Nat } {
+    if (not (Authorization.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can complete missions");
+    };
+    let profile = switch (profiles.get(caller)) {
+      case (null) { Runtime.trap("User not found") };
+      case (?p) { p };
+    };
+    let scaling = getTierXpScaling(profile.tier);
+    let xpGain = scaling.mission;
+    await awardXp(caller, xpGain);
+    { xpGained = xpGain };
   };
 
   // *** Tournaments ***
@@ -471,7 +524,6 @@ actor {
     if (sortedEntries.size() > 0) {
       await awardXp(sortedEntries[0].userId, 500);
     };
-    // Add ad-free rewards for paid tournaments here if needed
   };
 
   // *** Diet Management ***
@@ -516,7 +568,7 @@ actor {
     entries.sort(func(a, b) { Nat.compare(b.xp, a.xp) });
   };
 
-    // *** Stripe Integration ***
+  // *** Stripe Integration ***
   public query ({ caller }) func isStripeConfigured() : async Bool {
     stripeConfig != null;
   };
@@ -587,7 +639,7 @@ actor {
       challenger = ?caller;
       creatorScore = battle.creatorScore;
       challengerScore = battle.challengerScore;
-      status = #active;
+      status = battle.status;
       expiresAt = battle.expiresAt;
     };
     battles.add(code, updated);
@@ -606,13 +658,9 @@ actor {
       case (null) { Runtime.trap("Battle not started") };
       case (?challenger) {
         if (caller == battle.creator) {
-          {
-            battle with creatorScore = score;
-          };
+          { battle with creatorScore = score };
         } else if (caller == challenger) {
-          {
-            battle with challengerScore = score;
-          };
+          { battle with challengerScore = score };
         } else { Runtime.trap("Only participants can update scores") };
       };
     };
@@ -658,7 +706,6 @@ actor {
       case (null) { List.empty<BattleChatMessage>() };
       case (?m) { m };
     };
-    // Keep max 100 messages
     msgs.add(msg);
     battleChats.add(code, msgs);
   };
@@ -668,5 +715,167 @@ actor {
       case (null) { [] };
       case (?msgs) { msgs.toArray() };
     };
+  };
+
+  // *** Daily Streaks ***
+  public type Streak = {
+    currentStreak : Nat;
+    lastActiveDate : Text;
+  };
+
+  public shared ({ caller }) func updateStreak(date : Text) : async Nat {
+    if (not (Authorization.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can update streaks");
+    };
+    let current = switch (dailyStreaks.get(caller)) {
+      case (null) { {
+        lastActiveDate = date;
+        currentStreak = 1;
+      } };
+      case (?s) {
+        let streak = if (s.lastActiveDate != date) {
+          {
+            lastActiveDate = date;
+            currentStreak = s.currentStreak + 1;
+          };
+        } else {
+          s;
+        };
+        streak;
+      };
+    };
+    dailyStreaks.add(caller, current);
+    current.currentStreak;
+  };
+
+  public query ({ caller }) func getMyStreak() : async Streak {
+    if (not (Authorization.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can view streaks");
+    };
+    switch (dailyStreaks.get(caller)) {
+      case (null) { { currentStreak = 0; lastActiveDate = "" } };
+      case (?s) { s };
+    };
+  };
+
+  // *** Friends System ***
+  public shared ({ caller }) func sendFriendRequest(to : Principal) : async { #ok; #err : Text } {
+    if (not (Authorization.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can send friend requests");
+    };
+    if (to.isAnonymous()) { return #err("Invalid user") };
+    if (caller == to) { return #err("Cannot add yourself") };
+
+    let senderRequests = switch (pendingFriendRequests.get(caller)) {
+      case (null) { List.empty<Principal>() };
+      case (?friends) { friends };
+    };
+    let alreadyPending = senderRequests.toArray().find(func(p) { p == to });
+    switch (alreadyPending) {
+      case (?_) { return #err("Already pending") };
+      case (null) {
+        senderRequests.add(to);
+        pendingFriendRequests.add(caller, senderRequests);
+      };
+    };
+    #ok;
+  };
+
+  public shared ({ caller }) func acceptFriendRequest(from : Principal) : async { #ok; #err : Text } {
+    if (not (Authorization.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can accept friend requests");
+    };
+    let receiverRequests = switch (pendingFriendRequests.get(from)) {
+      case (null) { List.empty<Principal>() };
+      case (?friends) { friends };
+    };
+    let found = receiverRequests.toArray().find(func(p) { p == caller });
+    switch (found) {
+      case (null) { return #err("Friend request not found") };
+      case (?_) {
+        let filtered = receiverRequests.toArray().filter(func(p) { p != caller });
+        pendingFriendRequests.add(from, List.fromArray(filtered));
+
+        let receiverFriends = switch (friends.get(from)) {
+          case (null) { List.empty<Principal>() };
+          case (?f) { f };
+        };
+        receiverFriends.add(caller);
+        friends.add(from, receiverFriends);
+      };
+    };
+    #ok;
+  };
+
+  public shared ({ caller }) func declineFriendRequest(from : Principal) : async { #ok; #err : Text } {
+    if (not (Authorization.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can decline friend requests");
+    };
+    let receiverRequests = switch (pendingFriendRequests.get(from)) {
+      case (null) { List.empty<Principal>() };
+      case (?friends) { friends };
+    };
+    let found = receiverRequests.toArray().find(func(p) { p == caller });
+    switch (found) {
+      case (null) { return #err("Friend request not found") };
+      case (?_) {
+        let filtered = receiverRequests.toArray().filter(func(p) { p != caller });
+        pendingFriendRequests.add(from, List.fromArray(filtered));
+        #ok;
+      };
+    };
+  };
+
+  public query ({ caller }) func getMyFriendRequests() : async [Principal] {
+    if (not (Authorization.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can view friend requests");
+    };
+    switch (pendingFriendRequests.get(caller)) {
+      case (null) { [] };
+      case (?friends) { friends.toArray() };
+    };
+  };
+
+  public query ({ caller }) func getMyFriends() : async [Principal] {
+    if (not (Authorization.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can view friends");
+    };
+    switch (friends.get(caller)) {
+      case (null) { [] };
+      case (?f) { f.toArray() };
+    };
+  };
+
+  public query ({ caller }) func searchUserByUsername(username : Text) : async ?UserProfile {
+    profiles.values().toArray().find(func(p) { p.username == username });
+  };
+
+  // *** Friends Leaderboard ***
+  public query ({ caller }) func getFriendsLeaderboard() : async [UserProfile] {
+    if (not (Authorization.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can view friends leaderboard");
+    };
+    let friendsArray = switch (friends.get(caller)) {
+      case (null) { [] };
+      case (?f) { f.toArray() };
+    };
+    if (friendsArray.size() == 0) { return [] };
+    let myProfile = switch (profiles.get(caller)) {
+      case (null) { Runtime.trap("User not found") };
+      case (?p) { p };
+    };
+    let allProfiles = Array.tabulate(
+      friendsArray.size(), func(i) {
+        let friend = friendsArray[i];
+        switch (profiles.get(friend)) {
+          case (null) { myProfile };
+          case (?p) { p };
+        };
+      },
+    );
+    let leaderboard = Array.tabulate(allProfiles.size() + 1, func(i) {
+      if (i == 0) { myProfile } else { allProfiles[i - 1] };
+    });
+    leaderboard.sort(func(a, b) { Nat.compare(b.xp, a.xp) });
   };
 };

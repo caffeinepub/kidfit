@@ -6,6 +6,7 @@ import {
   Calendar,
   Eye,
   EyeOff,
+  Flame,
   LogOut,
   Shield,
   Star,
@@ -13,34 +14,22 @@ import {
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
-import { Tier } from "../backend.d";
+import type { Page } from "../App";
 import RewardedAdModal from "../components/RewardedAdModal";
 import TierBadge from "../components/TierBadge";
 import { useAdUnlock } from "../hooks/useAdUnlock";
-import { useCoins } from "../hooks/useCoins";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import { usePushUpStats } from "../hooks/usePushUpStats";
-import { useUserProfile } from "../hooks/useQueries";
+import { useMyStreak, useUserProfile } from "../hooks/useQueries";
 import {
   TIERS,
+  Tier,
   getTierFromXp,
   getTierInfo,
   getXpProgress,
   getXpToNextTier,
   levelFromXp,
 } from "../lib/xp";
-
-type Page =
-  | "home"
-  | "exercises"
-  | "pushups"
-  | "tournaments"
-  | "profile"
-  | "battle"
-  | "diet"
-  | "admin"
-  | "avatar"
-  | "premium";
 
 interface ProfilePageProps {
   onNavigate?: (page: Page) => void;
@@ -52,11 +41,7 @@ export default function ProfilePage({ onNavigate }: ProfilePageProps) {
   const { data: profile, isLoading } = useUserProfile();
   const { clear, identity } = useInternetIdentity();
   const { stats } = usePushUpStats();
-  const { data: coins = BigInt(0) } = useCoins();
-
-  const handleViewProfile = () => {
-    setAdModalOpen(true);
-  };
+  const { data: streakData } = useMyStreak();
 
   const handleAdComplete = () => {
     setAdModalOpen(false);
@@ -65,23 +50,18 @@ export default function ProfilePage({ onNavigate }: ProfilePageProps) {
 
   const xp = profile ? Number(profile.xp) : 0;
   const level = levelFromXp(xp);
-  const tier = profile?.tier ?? Tier.bronze;
   const xpTierInfo = getTierFromXp(xp);
+  const tier = xpTierInfo.tier;
   const xpProgress = getXpProgress(xp, xpTierInfo);
   const xpToNext = getXpToNextTier(xp, xpTierInfo);
 
-  const now = BigInt(Date.now()) * BigInt(1_000_000);
-  const isAdFree = profile?.adFreeUntil ? profile.adFreeUntil > now : false;
-  const adFreeDate = profile?.adFreeUntil
-    ? new Date(Number(profile.adFreeUntil) / 1_000_000).toLocaleDateString(
-        "en-IN",
-        {
-          day: "numeric",
-          month: "short",
-          year: "numeric",
-        },
-      )
-    : null;
+  const TIER_ORDER: Tier[] = [
+    Tier.bronze,
+    Tier.silver,
+    Tier.gold,
+    Tier.platinum,
+    Tier.diamond,
+  ];
 
   const TIERS_NEXT: Partial<Record<Tier, Tier>> = {
     [Tier.bronze]: Tier.silver,
@@ -91,6 +71,8 @@ export default function ProfilePage({ onNavigate }: ProfilePageProps) {
   };
   const nextTier = TIERS_NEXT[tier];
   const nextTierInfo = nextTier ? getTierInfo(nextTier) : null;
+
+  const currentStreak = streakData ? Number(streakData.currentStreak) : 0;
 
   return (
     <div className="flex flex-col min-h-screen gradient-mesh pb-36">
@@ -121,6 +103,35 @@ export default function ProfilePage({ onNavigate }: ProfilePageProps) {
       </header>
 
       <main className="flex-1 px-4 space-y-4">
+        {/* Streak Badge */}
+        {currentStreak > 0 && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="flex items-center gap-3 p-3 rounded-2xl"
+            style={{
+              background: "oklch(0.82 0.17 90 / 0.1)",
+              border: "1px solid oklch(0.82 0.17 90 / 0.35)",
+            }}
+          >
+            <Flame
+              className="w-6 h-6"
+              style={{ color: "oklch(0.82 0.17 90)" }}
+            />
+            <div>
+              <div
+                className="font-display font-black text-lg leading-none"
+                style={{ color: "oklch(0.82 0.17 90)" }}
+              >
+                {currentStreak} Day Streak 🔥
+              </div>
+              <div className="text-xs text-muted-foreground font-body mt-0.5">
+                Keep it up! Log in every day to maintain your streak
+              </div>
+            </div>
+          </motion.div>
+        )}
+
         <AnimatePresence mode="wait">
           {!profileUnlocked ? (
             <motion.div
@@ -129,7 +140,6 @@ export default function ProfilePage({ onNavigate }: ProfilePageProps) {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
             >
-              {/* Blurred preview */}
               <div className="card-sporty p-6 mb-4 relative overflow-hidden">
                 <div className="filter blur-md pointer-events-none select-none">
                   <div className="flex items-center gap-4 mb-4">
@@ -150,8 +160,6 @@ export default function ProfilePage({ onNavigate }: ProfilePageProps) {
                   <div className="h-3 bg-primary/30 rounded mb-2" />
                   <div className="h-3 bg-muted/50 rounded w-3/4" />
                 </div>
-
-                {/* Lock overlay */}
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/60 backdrop-blur-sm">
                   <EyeOff className="w-10 h-10 text-muted-foreground mb-3" />
                   <p className="font-display font-bold text-base mb-1">
@@ -165,7 +173,7 @@ export default function ProfilePage({ onNavigate }: ProfilePageProps) {
 
               <Button
                 data-ocid="profile.view.button"
-                onClick={handleViewProfile}
+                onClick={() => setAdModalOpen(true)}
                 className="w-full h-14 bg-primary text-primary-foreground font-display font-bold text-base glow-green"
               >
                 <Eye className="w-5 h-5 mr-2" />
@@ -203,11 +211,6 @@ export default function ProfilePage({ onNavigate }: ProfilePageProps) {
                         </h2>
                         <div className="flex items-center gap-2 mt-1">
                           <TierBadge tier={tier} size="sm" />
-                          {isAdFree && (
-                            <span className="text-xs bg-chart-2/20 text-chart-2 border border-chart-2/30 rounded-full px-2 py-0.5 font-body font-medium">
-                              Ad-Free ✨
-                            </span>
-                          )}
                         </div>
                       </div>
                     </div>
@@ -243,7 +246,7 @@ export default function ProfilePage({ onNavigate }: ProfilePageProps) {
                       </div>
                     </div>
 
-                    {/* Stats Grid — 2x2 */}
+                    {/* Stats Grid */}
                     <div className="grid grid-cols-2 gap-3 mb-4">
                       <div className="bg-muted/30 rounded-xl p-3 text-center">
                         <div className="font-display font-black text-2xl text-neon-green">
@@ -283,24 +286,9 @@ export default function ProfilePage({ onNavigate }: ProfilePageProps) {
                           Total Push-Ups
                         </div>
                       </div>
-                      <div
-                        data-ocid="profile.coins.card"
-                        className="col-span-2 bg-muted/30 rounded-xl p-3 text-center"
-                        style={{ border: "1px solid rgba(212,175,55,0.25)" }}
-                      >
-                        <div
-                          className="font-display font-black text-2xl"
-                          style={{ color: "#D4AF37" }}
-                        >
-                          🪙 {Number(coins)}
-                        </div>
-                        <div className="text-xs text-muted-foreground font-body">
-                          Coins
-                        </div>
-                      </div>
                     </div>
 
-                    {/* Badges Section */}
+                    {/* Badges */}
                     <div data-ocid="profile.badges.section">
                       <h3 className="font-display font-bold text-sm mb-2 flex items-center gap-1">
                         🏅 Badges Earned
@@ -319,9 +307,6 @@ export default function ProfilePage({ onNavigate }: ProfilePageProps) {
                             >
                               <span className="inline-flex items-center gap-1 text-xs bg-primary/10 border border-primary/40 text-primary rounded-full px-2.5 py-1 font-body font-medium">
                                 {badge.emoji} {badge.label}
-                              </span>
-                              <span className="text-[10px] text-muted-foreground font-body text-center max-w-[80px] leading-tight">
-                                {badge.description}
                               </span>
                             </div>
                           ))}
@@ -362,32 +347,6 @@ export default function ProfilePage({ onNavigate }: ProfilePageProps) {
                 </button>
               </div>
 
-              {/* Ad-Free Status */}
-              {isAdFree && adFreeDate && (
-                <motion.div
-                  initial={{ opacity: 0, y: 5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="card-sporty p-4 flex items-center gap-3"
-                  style={{
-                    background:
-                      "linear-gradient(135deg, oklch(0.16 0.04 265), oklch(0.18 0.08 160 / 0.3))",
-                  }}
-                >
-                  <div className="w-10 h-10 rounded-xl bg-chart-2/20 flex items-center justify-center">
-                    <Shield className="w-5 h-5 text-chart-2" />
-                  </div>
-                  <div>
-                    <div className="font-display font-bold text-sm text-chart-2">
-                      Ad-Free Active!
-                    </div>
-                    <div className="text-xs text-muted-foreground font-body flex items-center gap-1">
-                      <Calendar className="w-3 h-3" />
-                      Expires {adFreeDate}
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-
               {/* Tier Progression */}
               <div className="card-sporty p-4">
                 <h3 className="font-display font-bold text-sm mb-3 flex items-center gap-2">
@@ -397,13 +356,6 @@ export default function ProfilePage({ onNavigate }: ProfilePageProps) {
                 <div className="space-y-2">
                   {TIERS.map((t) => {
                     const isCurrentTier = t.tier === tier;
-                    const TIER_ORDER: Tier[] = [
-                      Tier.bronze,
-                      Tier.silver,
-                      Tier.gold,
-                      Tier.platinum,
-                      Tier.diamond,
-                    ];
                     const isAchieved =
                       TIER_ORDER.indexOf(t.tier) <= TIER_ORDER.indexOf(tier);
                     const tierProg = isCurrentTier
@@ -414,14 +366,22 @@ export default function ProfilePage({ onNavigate }: ProfilePageProps) {
                     return (
                       <div key={t.tier} className="flex items-center gap-3">
                         <span
-                          className={`text-base ${isAchieved ? "opacity-100" : "opacity-30"}`}
+                          className={`text-base ${
+                            isAchieved ? "opacity-100" : "opacity-30"
+                          }`}
                         >
                           {t.emoji}
                         </span>
                         <div className="flex-1">
                           <div className="flex justify-between text-xs mb-0.5">
                             <span
-                              className={`font-display font-bold ${isCurrentTier ? "text-neon-green" : isAchieved ? "text-foreground" : "text-muted-foreground"}`}
+                              className={`font-display font-bold ${
+                                isCurrentTier
+                                  ? "text-neon-green"
+                                  : isAchieved
+                                    ? "text-foreground"
+                                    : "text-muted-foreground"
+                              }`}
                             >
                               {t.label}
                             </span>
@@ -431,7 +391,13 @@ export default function ProfilePage({ onNavigate }: ProfilePageProps) {
                           </div>
                           <Progress
                             value={tierProg}
-                            className={`h-1.5 ${isCurrentTier ? "" : isAchieved ? "opacity-60" : "opacity-20"}`}
+                            className={`h-1.5 ${
+                              isCurrentTier
+                                ? ""
+                                : isAchieved
+                                  ? "opacity-60"
+                                  : "opacity-20"
+                            }`}
                           />
                         </div>
                       </div>
@@ -439,6 +405,8 @@ export default function ProfilePage({ onNavigate }: ProfilePageProps) {
                   })}
                 </div>
               </div>
+
+              {/* Ad-Free Status card removed — handled by premium */}
 
               {/* Principal */}
               {identity && (

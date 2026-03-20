@@ -21,6 +21,14 @@ export interface Battle {
   'challengerScore' : bigint,
   'challenger' : [] | [Principal],
 }
+export interface BattleChatMessage {
+  'id' : bigint,
+  'text' : string,
+  'senderUsername' : string,
+  'sender' : Principal,
+  'timestamp' : Time,
+  'battleCode' : string,
+}
 export interface DietEntry {
   'id' : bigint,
   'fat' : bigint,
@@ -56,6 +64,7 @@ export interface ShoppingItem {
   'priceInCents' : bigint,
   'productDescription' : string,
 }
+export interface Streak { 'lastActiveDate' : string, 'currentStreak' : bigint }
 export interface StripeConfiguration {
   'allowedCountries' : Array<string>,
   'secretKey' : string,
@@ -95,29 +104,46 @@ export interface UserProfile {
 export type UserRole = { 'admin' : null } |
   { 'user' : null } |
   { 'guest' : null };
+export interface WorkoutExercise {
+  'name' : string,
+  'reps' : bigint,
+  'sets' : bigint,
+  'notes' : string,
+}
+export interface WorkoutPlan {
+  'id' : bigint,
+  'exercises' : Array<WorkoutExercise>,
+  'description' : string,
+  'dayLabel' : string,
+}
+export interface WorkoutSession {
+  'exerciseId' : bigint,
+  'userId' : Principal,
+  'reps' : bigint,
+  'timestamp' : Time,
+}
 export interface http_header { 'value' : string, 'name' : string }
 export interface http_request_result {
   'status' : bigint,
   'body' : Uint8Array,
   'headers' : Array<http_header>,
 }
-export interface BattleChatMessage {
-  'id' : bigint,
-  'battleCode' : string,
-  'sender' : Principal,
-  'senderUsername' : string,
-  'text' : string,
-  'timestamp' : Time,
-}
 export interface _SERVICE {
   '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
+  'acceptFriendRequest' : ActorMethod<
+    [Principal],
+    { 'ok' : null } |
+      { 'err' : string }
+  >,
   'addDietEntry' : ActorMethod<[DietEntry], undefined>,
   'addExercise' : ActorMethod<[Exercise], undefined>,
   'addExerciseCategory' : ActorMethod<[ExerciseCategory], undefined>,
+  'addWorkoutPlan' : ActorMethod<[WorkoutPlan], bigint>,
   'addXp' : ActorMethod<[Principal, bigint], undefined>,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
   'canSeeAd' : ActorMethod<[], boolean>,
-  'claimAdminRole' : ActorMethod<[string], undefined>,
+  'completeMission' : ActorMethod<[string], { 'xpGained' : bigint }>,
+  'completeWorkout' : ActorMethod<[], { 'xpGained' : bigint }>,
   'createBattle' : ActorMethod<[string], undefined>,
   'createCheckoutSession' : ActorMethod<
     [Array<ShoppingItem>, string, string],
@@ -127,6 +153,12 @@ export interface _SERVICE {
     [string, Time, Time, bigint, boolean],
     bigint
   >,
+  'declineFriendRequest' : ActorMethod<
+    [Principal],
+    { 'ok' : null } |
+      { 'err' : string }
+  >,
+  'deleteWorkoutPlan' : ActorMethod<[bigint], undefined>,
   'enterTournament' : ActorMethod<[bigint], undefined>,
   'finalizeTournament' : ActorMethod<[bigint], undefined>,
   'getBattle' : ActorMethod<[string], [] | [Battle]>,
@@ -137,11 +169,17 @@ export interface _SERVICE {
   'getDietEntries' : ActorMethod<[], Array<DietEntry>>,
   'getDietEntriesByCategory' : ActorMethod<[string], Array<DietEntry>>,
   'getExercisesByCategory' : ActorMethod<[string], Array<Exercise>>,
+  'getFriendsLeaderboard' : ActorMethod<[], Array<UserProfile>>,
   'getLeaderboard' : ActorMethod<[], Array<LeaderboardEntry>>,
+  'getMyFriendRequests' : ActorMethod<[], Array<Principal>>,
+  'getMyFriends' : ActorMethod<[], Array<Principal>>,
+  'getMyStreak' : ActorMethod<[], Streak>,
   'getProfile' : ActorMethod<[Principal], UserProfile>,
   'getStripeSessionStatus' : ActorMethod<[string], StripeSessionStatus>,
   'getTournamentLeaderboard' : ActorMethod<[bigint], Array<TournamentEntry>>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
+  'getWorkoutPlans' : ActorMethod<[], Array<WorkoutPlan>>,
+  'getWorkoutSessions' : ActorMethod<[], Array<WorkoutSession>>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
   'isStripeConfigured' : ActorMethod<[], boolean>,
   'joinBattle' : ActorMethod<[string], undefined>,
@@ -150,11 +188,18 @@ export interface _SERVICE {
   'recordAdView' : ActorMethod<[], undefined>,
   'registerUser' : ActorMethod<[string], undefined>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
+  'searchUserByUsername' : ActorMethod<[string], [] | [UserProfile]>,
   'sendBattleChat' : ActorMethod<[string, string], undefined>,
+  'sendFriendRequest' : ActorMethod<
+    [Principal],
+    { 'ok' : null } |
+      { 'err' : string }
+  >,
   'setStripeConfiguration' : ActorMethod<[StripeConfiguration], undefined>,
   'submitTournamentScore' : ActorMethod<[bigint, bigint], undefined>,
   'transform' : ActorMethod<[TransformationInput], TransformationOutput>,
   'updateMyBattleScore' : ActorMethod<[string, bigint], undefined>,
+  'updateStreak' : ActorMethod<[string], bigint>,
 }
 export declare const idlService: IDL.ServiceClass;
 export declare const idlInitArgs: IDL.Type[];

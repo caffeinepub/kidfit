@@ -1,32 +1,32 @@
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Dumbbell, Lock, Star, Target, Trophy, User } from "lucide-react";
+import {
+  Dumbbell,
+  Flame,
+  Lock,
+  Star,
+  Target,
+  Trophy,
+  User,
+} from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
-import { Tier } from "../backend.d";
+import type { Page } from "../App";
 import DailyMissionCard from "../components/DailyMissionCard";
 import RewardedAdModal from "../components/RewardedAdModal";
 import TierBadge from "../components/TierBadge";
 import { useAdUnlock } from "../hooks/useAdUnlock";
 import { usePushUpStats } from "../hooks/usePushUpStats";
-import { useUserProfile } from "../hooks/useQueries";
+import { useMyStreak, useUserProfile } from "../hooks/useQueries";
 import {
+  Tier,
   getTierFromXp,
   getTierInfo,
   getXpProgress,
   getXpToNextTier,
+  levelFromXp,
 } from "../lib/xp";
-
-type Page =
-  | "home"
-  | "exercises"
-  | "pushups"
-  | "tournaments"
-  | "profile"
-  | "battle"
-  | "diet"
-  | "admin";
 
 interface HomePageProps {
   onNavigate: (page: Page) => void;
@@ -50,16 +50,18 @@ export default function HomePage({ onNavigate }: HomePageProps) {
   const { data: profile, isLoading } = useUserProfile();
   const { isUnlocked, unlock } = useAdUnlock();
   const { stats, refresh } = usePushUpStats();
+  const { data: streakData } = useMyStreak();
   const [adModalOpen, setAdModalOpen] = useState(false);
 
   const xp = profile ? Number(profile.xp) : 0;
-  const level = profile ? Number(profile.level) : 1;
-  const tier = profile?.tier ?? Tier.bronze;
+  const level = levelFromXp(xp);
   const xpTierInfo = getTierFromXp(xp);
+  const tier = xpTierInfo.tier;
   const xpProgress = getXpProgress(xp, xpTierInfo);
   const xpToNext = getXpToNextTier(xp, xpTierInfo);
   const nextTier = TIERS_NEXT[tier];
   const nextTierInfo = nextTier ? getTierInfo(nextTier) : null;
+  const currentStreak = streakData ? Number(streakData.currentStreak) : 0;
 
   const handleAdComplete = () => {
     setAdModalOpen(false);
@@ -138,6 +140,22 @@ export default function HomePage({ onNavigate }: HomePageProps) {
             )}
           </div>
           <div className="flex items-center gap-2">
+            {/* Streak badge in header */}
+            {currentStreak > 0 && (
+              <motion.div
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full font-display font-bold text-xs"
+                style={{
+                  background: "oklch(0.82 0.17 90 / 0.15)",
+                  border: "1px solid oklch(0.82 0.17 90 / 0.4)",
+                  color: "oklch(0.82 0.17 90)",
+                }}
+              >
+                <Flame className="w-3.5 h-3.5" />
+                {currentStreak}d
+              </motion.div>
+            )}
             {isLoading ? (
               <Skeleton className="w-16 h-8 rounded-full" />
             ) : (
@@ -148,7 +166,33 @@ export default function HomePage({ onNavigate }: HomePageProps) {
       </header>
 
       <main className="flex-1 px-4 space-y-4">
-        {/* XP Card - gradient variant */}
+        {/* Streak card — shown when streak > 1 */}
+        {currentStreak > 1 && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center gap-3 p-3 rounded-2xl"
+            style={{
+              background: "oklch(0.82 0.17 90 / 0.08)",
+              border: "1px solid oklch(0.82 0.17 90 / 0.25)",
+            }}
+          >
+            <span className="text-2xl">🔥</span>
+            <div>
+              <div
+                className="font-display font-black text-base leading-none"
+                style={{ color: "oklch(0.82 0.17 90)" }}
+              >
+                {currentStreak} Day Streak!
+              </div>
+              <div className="text-xs text-muted-foreground font-body mt-0.5">
+                Come back tomorrow to keep it alive
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* XP Card */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -195,7 +239,6 @@ export default function HomePage({ onNavigate }: HomePageProps) {
             </>
           )}
 
-          {/* Tier progress dots */}
           <div className="mt-4 flex justify-between items-center">
             {TIER_ORDER.map((tTier) => {
               const isCurrentTier = tTier === tier;
@@ -237,7 +280,6 @@ export default function HomePage({ onNavigate }: HomePageProps) {
           </div>
 
           {isUnlocked ? (
-            /* Unlocked — real stats */
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-muted/30 rounded-xl p-3 text-center">
@@ -282,7 +324,6 @@ export default function HomePage({ onNavigate }: HomePageProps) {
               </div>
             </div>
           ) : (
-            /* Locked — blurred preview + CTA */
             <div className="relative">
               <div className="filter blur-sm pointer-events-none select-none">
                 <div className="grid grid-cols-2 gap-3 mb-3">
@@ -310,9 +351,6 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                   <span className="inline-flex items-center gap-1 text-xs bg-primary/10 border border-primary/30 text-primary rounded-full px-2.5 py-1 font-body">
                     💪 10 Rep Club
                   </span>
-                  <span className="inline-flex items-center gap-1 text-xs bg-primary/10 border border-primary/30 text-primary rounded-full px-2.5 py-1 font-body">
-                    🥈 50 Rep Club
-                  </span>
                 </div>
               </div>
               <div className="absolute inset-0 flex items-center justify-center">
@@ -329,7 +367,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
           )}
         </motion.div>
 
-        {/* Quick Action Buttons */}
+        {/* Quick Actions */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}

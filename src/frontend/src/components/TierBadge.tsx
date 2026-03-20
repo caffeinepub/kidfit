@@ -1,6 +1,5 @@
 import { cn } from "@/lib/utils";
-import { Tier } from "../backend.d";
-import { getTierInfo } from "../lib/xp";
+import { Tier, getTierInfo } from "../lib/xp";
 
 interface TierBadgeProps {
   tier: Tier;

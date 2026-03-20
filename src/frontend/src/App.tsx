@@ -2,6 +2,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import AdBanner from "./components/AdBanner";
 import BottomNav from "./components/BottomNav";
+import { useActor } from "./hooks/useActor";
 import { useInternetIdentity } from "./hooks/useInternetIdentity";
 import { useUserProfile } from "./hooks/useQueries";
 
@@ -17,8 +18,9 @@ const LeaderboardPage = lazy(() => import("./pages/LeaderboardPage"));
 const AuthPage = lazy(() => import("./pages/AuthPage"));
 const AvatarPage = lazy(() => import("./pages/AvatarPage"));
 const PremiumPage = lazy(() => import("./pages/PremiumPage"));
+const FriendsPage = lazy(() => import("./pages/FriendsPage"));
 
-type Page =
+export type Page =
   | "home"
   | "exercises"
   | "pushups"
@@ -29,7 +31,8 @@ type Page =
   | "admin"
   | "leaderboard"
   | "avatar"
-  | "premium";
+  | "premium"
+  | "friends";
 
 function PageLoader() {
   return (
@@ -39,12 +42,30 @@ function PageLoader() {
   );
 }
 
+function StreakUpdater() {
+  const { actor } = useActor();
+  const { data: profile } = useUserProfile();
+  const didUpdate = useRef(false);
+
+  useEffect(() => {
+    if (!actor || !profile || didUpdate.current) return;
+    didUpdate.current = true;
+    const today = new Date().toISOString().slice(0, 10);
+    (actor as unknown as { updateStreak(date: string): Promise<bigint> })
+      .updateStreak(today)
+      .catch(() => {
+        /* silent */
+      });
+  }, [actor, profile]);
+
+  return null;
+}
+
 export default function App() {
   const [currentPage, setCurrentPage] = useState<Page>("home");
   const { identity, isInitializing } = useInternetIdentity();
   const { data: profile, isLoading: profileLoading } = useUserProfile();
 
-  // Hard timeout: if loading screen shows for more than 4s, force proceed
   const [loadingTimedOut, setLoadingTimedOut] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -81,7 +102,6 @@ export default function App() {
     !isInitializing &&
     (!isAuthenticated || (isAuthenticated && !profileLoading && !hasProfile));
 
-  // Show startup splash only while loading AND not yet timed out
   if (isWaiting && !loadingTimedOut) {
     return (
       <div className="min-h-screen gradient-mesh flex items-center justify-center">
@@ -130,6 +150,8 @@ export default function App() {
         return <AvatarPage onBack={() => setCurrentPage("profile")} />;
       case "premium":
         return <PremiumPage onBack={() => setCurrentPage("profile")} />;
+      case "friends":
+        return <FriendsPage />;
       default:
         return <HomePage onNavigate={setCurrentPage} />;
     }
@@ -137,6 +159,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-background relative">
+      <StreakUpdater />
       <Suspense fallback={<PageLoader />}>{renderPage()}</Suspense>
       <BottomNav current={currentPage} onNavigate={setCurrentPage} />
       <AdBanner />

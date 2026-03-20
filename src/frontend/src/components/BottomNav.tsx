@@ -6,22 +6,10 @@ import {
   Home,
   Swords,
   Target,
-  Trophy,
   User,
+  Users,
 } from "lucide-react";
-
-type Page =
-  | "home"
-  | "exercises"
-  | "pushups"
-  | "tournaments"
-  | "profile"
-  | "battle"
-  | "diet"
-  | "admin"
-  | "leaderboard"
-  | "avatar"
-  | "premium";
+import type { Page } from "../App";
 
 interface BottomNavProps {
   current: Page;
@@ -58,10 +46,10 @@ const navRow2 = [
     ocid: "nav.leaderboard.link",
   },
   {
-    id: "tournaments" as Page,
-    label: "Events",
-    icon: Trophy,
-    ocid: "nav.tournaments.link",
+    id: "friends" as Page,
+    label: "Friends",
+    icon: Users,
+    ocid: "nav.friends.link",
   },
   { id: "diet" as Page, label: "Diet", icon: Apple, ocid: "nav.diet.link" },
   {
@@ -106,7 +94,6 @@ function NavRow({
             )}
             aria-current={isActive ? "page" : undefined}
           >
-            {/* Gold top accent line */}
             {isActive && (
               <span
                 className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-0.5 rounded-full"
@@ -117,7 +104,6 @@ function NavRow({
                 }}
               />
             )}
-            {/* Gold glow under active icon */}
             {isActive && (
               <span
                 className="absolute inset-0 rounded-sm pointer-events-none"
@@ -163,7 +149,6 @@ export default function BottomNav({ current, onNavigate }: BottomNavProps) {
       className="fixed bottom-0 left-0 right-0 z-50"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
-      {/* Spacer for ad banner */}
       <div className="h-[60px] pointer-events-none" id="ad-spacer" />
       <div
         className="border-t border-border/60"

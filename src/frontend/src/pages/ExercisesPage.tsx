@@ -22,8 +22,8 @@ import {
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Difficulty } from "../backend.d";
-import type { Exercise } from "../backend.d";
+import { Difficulty } from "../backend";
+import type { Exercise } from "../backend";
 import { useActor } from "../hooks/useActor";
 import {
   useCategories,
@@ -1115,6 +1115,98 @@ const YOGA_PLANS: WorkoutPlan[] = [
   },
 ];
 
+function getMusclesTargeted(name: string): string {
+  const n = name.toLowerCase();
+  if (n.includes("jumping jack") || n.includes("burpee"))
+    return "Full Body, Cardio";
+  if (n.includes("high knee")) return "Quads, Hip Flexors, Cardio";
+  if (n.includes("arm circle")) return "Shoulders, Rotator Cuff";
+  if (n.includes("declined push") || n.includes("decline push"))
+    return "Lower Chest, Triceps, Front Deltoids";
+  if (n.includes("inclined push") || n.includes("incline push"))
+    return "Upper Chest, Triceps, Front Deltoids";
+  if (n.includes("push up") || n.includes("pushup"))
+    return "Chest, Triceps, Front Deltoids";
+  if (n.includes("alternate curl")) return "Biceps, Forearms";
+  if (n.includes("hammer curl") && n.includes("both"))
+    return "Biceps, Brachialis, Forearms";
+  if (n.includes("hammer curl")) return "Biceps, Brachialis, Forearms";
+  if (n.includes("bicep curl")) return "Biceps";
+  if (n.includes("barbell curl")) return "Biceps";
+  if (n.includes("incline dumbbell curl")) return "Biceps (Long Head)";
+  if (n.includes("chair dip") || (n.includes("dip") && !n.includes("rear")))
+    return "Triceps, Chest, Front Deltoids";
+  if (n.includes("skull crusher") || n.includes("skullcrusher"))
+    return "Triceps (Long Head)";
+  if (n.includes("tricep rope") || n.includes("rope pushdown"))
+    return "Triceps";
+  if (n.includes("close-grip bench") || n.includes("close grip bench"))
+    return "Triceps, Inner Chest";
+  if (n.includes("cable fly") || n.includes("cable flye"))
+    return "Chest, Front Deltoids";
+  if (n.includes("incline dumbbell press"))
+    return "Upper Chest, Triceps, Front Deltoids";
+  if (n.includes("barbell bench press") || n.includes("bench press"))
+    return "Chest, Triceps, Front Deltoids";
+  if (n.includes("leaning back row")) return "Lats, Rhomboids, Biceps";
+  if (
+    n.includes("low back row") ||
+    (n.includes("single dumbbell") && n.includes("row"))
+  )
+    return "Lats, Rhomboids, Biceps";
+  if (n.includes("barbell row")) return "Lats, Rhomboids, Biceps";
+  if (n.includes("seated cable row")) return "Lats, Rhomboids, Biceps";
+  if (n.includes("pull-up") || n.includes("pull up") || n.includes("pullup"))
+    return "Lats, Biceps, Rear Deltoids";
+  if (n.includes("deadlift") && n.includes("romanian"))
+    return "Hamstrings, Glutes, Lower Back";
+  if (n.includes("deadlift")) return "Hamstrings, Glutes, Lower Back, Traps";
+  if (n.includes("leaning rear flye") || n.includes("alternative rear delt"))
+    return "Rear Deltoids, Rhomboids";
+  if (n.includes("rear delt fly") || n.includes("rear delt flye"))
+    return "Rear Deltoids, Rhomboids";
+  if (n.includes("face pull")) return "Rear Deltoids, Rotator Cuff, Traps";
+  if (n.includes("front raise")) return "Front Deltoids";
+  if (n.includes("lateral raise") || n.includes("dumbbell lateral"))
+    return "Side Deltoids";
+  if (n.includes("overhead barbell press") || n.includes("overhead press"))
+    return "Deltoids, Triceps, Traps";
+  if (n.includes("crucifix crunch")) return "Core, Obliques";
+  if (n.includes("hollow body")) return "Core, Hip Flexors";
+  if (n.includes("hanging leg raise")) return "Lower Abs, Hip Flexors";
+  if (n.includes("leg raise")) return "Lower Abs, Hip Flexors";
+  if (n.includes("cable crunch")) return "Abs";
+  if (n.includes("decline sit")) return "Upper Abs";
+  if (n.includes("side plank")) return "Obliques, Core";
+  if (n.includes("plank")) return "Core, Shoulders, Glutes";
+  if (n.includes("mountain climber")) return "Core, Shoulders, Cardio";
+  if (n.includes("jump squat")) return "Quads, Glutes, Calves, Cardio";
+  if (n.includes("goblet squat")) return "Quads, Glutes, Core";
+  if (n.includes("sumo squat")) return "Inner Thighs, Glutes, Quads";
+  if (n.includes("bulgarian split squat") || n.includes("bulgarian squat"))
+    return "Quads, Glutes, Hamstrings";
+  if (n.includes("barbell hip thrust")) return "Glutes, Hamstrings";
+  if (n.includes("glute bridge")) return "Glutes, Hamstrings";
+  if (n.includes("cable kickback")) return "Glutes";
+  if (n.includes("back extension")) return "Lower Back, Glutes";
+  if (n.includes("good morning")) return "Hamstrings, Lower Back, Glutes";
+  if (n.includes("standing calf raise")) return "Calves (Gastrocnemius)";
+  if (n.includes("seated calf raise")) return "Calves (Soleus)";
+  if (n.includes("donkey calf raise")) return "Calves (Gastrocnemius)";
+  if (n.includes("calf raise")) return "Calves";
+  if (n.includes("cobra")) return "Spine, Chest, Abs";
+  if (n.includes("cat cow")) return "Spine, Core";
+  if (n.includes("child")) return "Lower Back, Hips, Thighs";
+  if (n.includes("downward dog"))
+    return "Hamstrings, Calves, Shoulders, Upper Back";
+  if (n.includes("warrior")) return "Quads, Hip Flexors, Core";
+  if (n.includes("tree pose")) return "Core, Glutes, Balance";
+  if (n.includes("seated forward bend")) return "Hamstrings, Lower Back";
+  if (n.includes("corpse pose") || n.includes("savasana"))
+    return "Full Body Relaxation";
+  return "Full Body";
+}
+
 const ALL_PLANS_BY_CATEGORY: Record<WorkoutCategory, WorkoutPlan[]> = {
   home: WORKOUT_PLANS,
   gym: GYM_PLANS,
@@ -1160,15 +1252,12 @@ function buildSteps(exercises: WorkoutExercise[]): Step[] {
           setNum: s,
           totalSets,
         });
-        if (s < totalSets) {
-          steps.push({ kind: "rest", afterExerciseIndex: idx, afterSetNum: s });
-        }
+        // Add rest after EVERY set (including last set)
+        steps.push({ kind: "rest", afterExerciseIndex: idx, afterSetNum: s });
       }
     }
-    // Add rest between exercises (but not after the last one)
-    if (idx < exercises.length - 1) {
-      steps.push({ kind: "rest", afterExerciseIndex: idx, afterSetNum: 0 });
-    }
+    // Add rest after EVERY exercise (including last exercise)
+    steps.push({ kind: "rest", afterExerciseIndex: idx, afterSetNum: 0 });
   }
   return steps;
 }
@@ -1522,6 +1611,25 @@ function WorkoutOverlay({
                   <h2 className="text-white font-display font-black text-3xl text-center leading-tight">
                     {step.exercise.name}
                   </h2>
+                  {(() => {
+                    const muscles = getMusclesTargeted(step.exercise.name);
+                    return muscles ? (
+                      <div className="flex items-center gap-2 justify-center flex-wrap">
+                        <span
+                          className="text-xs font-body uppercase tracking-widest"
+                          style={{ color: "rgba(212,175,55,0.6)" }}
+                        >
+                          💪 Muscles:
+                        </span>
+                        <span
+                          className="text-xs font-display font-bold"
+                          style={{ color: "#D4AF37" }}
+                        >
+                          {muscles}
+                        </span>
+                      </div>
+                    ) : null;
+                  })()}
                   {/* Instructions */}
                   {(() => {
                     const instrs = getExerciseInstructions(step.exercise.name);
@@ -1567,56 +1675,6 @@ function WorkoutOverlay({
                     circ={circ}
                     fill={fill}
                   />
-                  {/* Optional Rest */}
-                  <div
-                    className="w-full rounded-2xl px-5 py-4 flex flex-col items-center gap-3"
-                    style={{
-                      background: "rgba(212,175,55,0.06)",
-                      border: "1px solid rgba(212,175,55,0.18)",
-                    }}
-                  >
-                    <span className="text-white/50 text-xs font-body uppercase tracking-widest">
-                      Optional Rest
-                    </span>
-                    {restActive ? (
-                      <>
-                        <span
-                          className="text-5xl font-display font-black"
-                          style={{ color: "#D4AF37" }}
-                        >
-                          {restSecondsLeft}s
-                        </span>
-                        <button
-                          type="button"
-                          data-ocid="workout.skip_optional_rest_button"
-                          onClick={() => {
-                            setRestActive(false);
-                            setRestSecondsLeft(30);
-                          }}
-                          className="text-white/40 text-sm underline font-body"
-                        >
-                          Skip Rest
-                        </button>
-                      </>
-                    ) : (
-                      <button
-                        type="button"
-                        data-ocid="workout.optional_rest_button"
-                        onClick={() => {
-                          setRestActive(true);
-                          setRestSecondsLeft(30);
-                        }}
-                        className="w-full h-10 rounded-xl text-sm font-display font-bold border"
-                        style={{
-                          borderColor: "#D4AF37",
-                          color: "#D4AF37",
-                          background: "transparent",
-                        }}
-                      >
-                        Start 30s Rest
-                      </button>
-                    )}
-                  </div>
                 </>
               )}
 
@@ -1647,6 +1705,25 @@ function WorkoutOverlay({
                   <h2 className="text-white font-display font-black text-3xl text-center leading-tight">
                     {step.exercise.name}
                   </h2>
+                  {(() => {
+                    const muscles = getMusclesTargeted(step.exercise.name);
+                    return muscles ? (
+                      <div className="flex items-center gap-2 justify-center flex-wrap">
+                        <span
+                          className="text-xs font-body uppercase tracking-widest"
+                          style={{ color: "rgba(212,175,55,0.6)" }}
+                        >
+                          💪 Muscles:
+                        </span>
+                        <span
+                          className="text-xs font-display font-bold"
+                          style={{ color: "#D4AF37" }}
+                        >
+                          {muscles}
+                        </span>
+                      </div>
+                    ) : null;
+                  })()}
                   {/* Instructions */}
                   {(() => {
                     const instrs = getExerciseInstructions(step.exercise.name);
@@ -1713,56 +1790,6 @@ function WorkoutOverlay({
                       heavy with a good grip 💪
                     </p>
                   )}
-                  {/* Optional Rest */}
-                  <div
-                    className="w-full rounded-2xl px-5 py-4 flex flex-col items-center gap-3"
-                    style={{
-                      background: "rgba(212,175,55,0.06)",
-                      border: "1px solid rgba(212,175,55,0.18)",
-                    }}
-                  >
-                    <span className="text-white/50 text-xs font-body uppercase tracking-widest">
-                      Optional Rest
-                    </span>
-                    {restActive ? (
-                      <>
-                        <span
-                          className="text-5xl font-display font-black"
-                          style={{ color: "#D4AF37" }}
-                        >
-                          {restSecondsLeft}s
-                        </span>
-                        <button
-                          type="button"
-                          data-ocid="workout.skip_optional_rest_button"
-                          onClick={() => {
-                            setRestActive(false);
-                            setRestSecondsLeft(30);
-                          }}
-                          className="text-white/40 text-sm underline font-body"
-                        >
-                          Skip Rest
-                        </button>
-                      </>
-                    ) : (
-                      <button
-                        type="button"
-                        data-ocid="workout.optional_rest_button"
-                        onClick={() => {
-                          setRestActive(true);
-                          setRestSecondsLeft(30);
-                        }}
-                        className="w-full h-10 rounded-xl text-sm font-display font-bold border"
-                        style={{
-                          borderColor: "#D4AF37",
-                          color: "#D4AF37",
-                          background: "transparent",
-                        }}
-                      >
-                        Start 30s Rest
-                      </button>
-                    )}
-                  </div>
                 </>
               )}
             </motion.div>
