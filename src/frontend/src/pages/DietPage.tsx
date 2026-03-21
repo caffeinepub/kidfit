@@ -73,13 +73,11 @@ type AppPage =
   | "home"
   | "exercises"
   | "pushups"
-  | "tournaments"
   | "profile"
   | "battle"
   | "diet"
   | "admin"
   | "leaderboard"
-  | "avatar"
   | "premium";
 
 interface DietPageProps {

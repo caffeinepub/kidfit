@@ -317,21 +317,8 @@ export default function ProfilePage({ onNavigate }: ProfilePageProps) {
                 )}
               </div>
 
-              {/* Avatar & Premium Buttons */}
+              {/* Premium Button */}
               <div className="flex gap-3">
-                <button
-                  type="button"
-                  data-ocid="profile.avatar.button"
-                  onClick={() => onNavigate?.("avatar")}
-                  className="flex-1 py-3 rounded-2xl font-display font-bold text-sm flex items-center justify-center gap-2"
-                  style={{
-                    background: "rgba(212,175,55,0.12)",
-                    border: "1px solid rgba(212,175,55,0.35)",
-                    color: "#D4AF37",
-                  }}
-                >
-                  🎨 My Avatar
-                </button>
                 <button
                   type="button"
                   data-ocid="profile.premium.button"

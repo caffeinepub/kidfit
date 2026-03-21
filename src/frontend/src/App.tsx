@@ -9,14 +9,12 @@ import { useUserProfile } from "./hooks/useQueries";
 const HomePage = lazy(() => import("./pages/HomePage"));
 const ExercisesPage = lazy(() => import("./pages/ExercisesPage"));
 const PushUpCounterPage = lazy(() => import("./pages/PushUpCounterPage"));
-const TournamentsPage = lazy(() => import("./pages/TournamentsPage"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 const BattlePage = lazy(() => import("./pages/BattlePage"));
 const DietPage = lazy(() => import("./pages/DietPage"));
 const AdminPage = lazy(() => import("./pages/AdminPage"));
 const LeaderboardPage = lazy(() => import("./pages/LeaderboardPage"));
 const AuthPage = lazy(() => import("./pages/AuthPage"));
-const AvatarPage = lazy(() => import("./pages/AvatarPage"));
 const PremiumPage = lazy(() => import("./pages/PremiumPage"));
 const FriendsPage = lazy(() => import("./pages/FriendsPage"));
 
@@ -24,13 +22,11 @@ export type Page =
   | "home"
   | "exercises"
   | "pushups"
-  | "tournaments"
   | "profile"
   | "battle"
   | "diet"
   | "admin"
   | "leaderboard"
-  | "avatar"
   | "premium"
   | "friends";
 
@@ -76,7 +72,7 @@ export default function App() {
 
   useEffect(() => {
     if (isWaiting && !loadingTimedOut) {
-      timerRef.current = setTimeout(() => setLoadingTimedOut(true), 8000);
+      timerRef.current = setTimeout(() => setLoadingTimedOut(true), 5000);
     } else {
       if (timerRef.current) clearTimeout(timerRef.current);
     }
@@ -87,11 +83,6 @@ export default function App() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const tournamentSuccess = params.get("tournament_success");
-    if (tournamentSuccess) {
-      setCurrentPage("tournaments");
-      window.history.replaceState({}, "", window.location.pathname);
-    }
     const premiumSuccess = params.get("premium_success");
     if (premiumSuccess) {
       setCurrentPage("premium");
@@ -134,8 +125,6 @@ export default function App() {
         return <ExercisesPage />;
       case "pushups":
         return <PushUpCounterPage />;
-      case "tournaments":
-        return <TournamentsPage />;
       case "profile":
         return <ProfilePage onNavigate={setCurrentPage} />;
       case "battle":
@@ -146,8 +135,6 @@ export default function App() {
         return <AdminPage />;
       case "leaderboard":
         return <LeaderboardPage />;
-      case "avatar":
-        return <AvatarPage onBack={() => setCurrentPage("profile")} />;
       case "premium":
         return <PremiumPage onBack={() => setCurrentPage("profile")} />;
       case "friends":

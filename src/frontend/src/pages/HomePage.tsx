@@ -123,7 +123,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
+          transition={{ duration: 0.2 }}
           className="flex items-center justify-between"
         >
           <div>
@@ -196,7 +196,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1, duration: 0.4 }}
+          transition={{ duration: 0.2 }}
           className="rounded-2xl p-5 border border-primary/25"
           style={{
             background:
@@ -265,7 +265,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.18, duration: 0.4 }}
+          transition={{ duration: 0.2 }}
           className="card-sporty p-5 relative overflow-hidden"
         >
           <div className="flex items-center justify-between mb-3">
@@ -371,20 +371,20 @@ export default function HomePage({ onNavigate }: HomePageProps) {
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2, duration: 0.4 }}
+          transition={{ duration: 0.2 }}
         >
           <h2 className="font-display font-bold text-base text-muted-foreground mb-3 uppercase tracking-wider">
             Quick Actions
           </h2>
           <div className="grid grid-cols-2 gap-3">
-            {quickActions.map((action, i) => {
+            {quickActions.map((action) => {
               const Icon = action.icon;
               return (
                 <motion.div
                   key={action.id}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.25 + i * 0.05, duration: 0.3 }}
+                  transition={{ duration: 0.2 }}
                 >
                   <Button
                     data-ocid={action.ocid}
@@ -417,7 +417,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.45, duration: 0.4 }}
+          transition={{ duration: 0.2 }}
           className="card-sporty p-5 relative overflow-hidden"
           style={{
             background:

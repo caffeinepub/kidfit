@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { CheckCircle2, Flame, Zap } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 interface DailyMission {
@@ -115,7 +115,7 @@ interface DailyMissionCardProps {
   username: string;
 }
 
-export default function DailyMissionCard({ username }: DailyMissionCardProps) {
+function DailyMissionCard({ username }: DailyMissionCardProps) {
   const today = new Date();
   const dayOfWeek = today.getDay(); // 0 = Sun, 1 = Mon, ...
   const mission = MISSIONS_BY_DAY[dayOfWeek];
@@ -352,3 +352,5 @@ export default function DailyMissionCard({ username }: DailyMissionCardProps) {
     </>
   );
 }
+
+export default React.memo(DailyMissionCard);

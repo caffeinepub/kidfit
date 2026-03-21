@@ -24,6 +24,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Difficulty } from "../backend";
 import type { Exercise } from "../backend";
+import RewardedAdModal from "../components/RewardedAdModal";
 import { useActor } from "../hooks/useActor";
 import {
   useCategories,
@@ -1606,6 +1607,7 @@ function WorkoutOverlay({
                       alt={step.exercise.name}
                       className="w-48 h-48 rounded-2xl object-cover mx-auto"
                       style={{ border: "1px solid rgba(212,175,55,0.35)" }}
+                      loading="lazy"
                     />
                   )}
                   <h2 className="text-white font-display font-black text-3xl text-center leading-tight">
@@ -1700,6 +1702,7 @@ function WorkoutOverlay({
                       alt={step.exercise.name}
                       className="w-48 h-48 rounded-2xl object-cover mx-auto"
                       style={{ border: "1px solid rgba(212,175,55,0.35)" }}
+                      loading="lazy"
                     />
                   )}
                   <h2 className="text-white font-display font-black text-3xl text-center leading-tight">
@@ -1893,6 +1896,10 @@ export default function ExercisesPage() {
   const [activeCategory, setActiveCategory] = useState<WorkoutCategory | null>(
     "home",
   );
+  const [fatLossAdOpen, setFatLossAdOpen] = useState(false);
+  const [yogaAdOpen, setYogaAdOpen] = useState(false);
+  const [fatLossUnlocked, setFatLossUnlocked] = useState(false);
+  const [yogaUnlocked, setYogaUnlocked] = useState(false);
   const [activeWorkoutExercises, setActiveWorkoutExercises] = useState<
     WorkoutExercise[]
   >([]);
@@ -2002,9 +2009,15 @@ export default function ExercisesPage() {
                   type="button"
                   key={key}
                   data-ocid={`train.${key}.tab`}
-                  onClick={() =>
-                    setActiveCategory((prev) => (prev === key ? null : key))
-                  }
+                  onClick={() => {
+                    if (key === "fatloss" && !fatLossUnlocked) {
+                      setFatLossAdOpen(true);
+                    } else if (key === "yoga" && !yogaUnlocked) {
+                      setYogaAdOpen(true);
+                    } else {
+                      setActiveCategory((prev) => (prev === key ? null : key));
+                    }
+                  }}
                   className="flex-1 flex flex-col items-center py-2 px-1 rounded-xl text-xs font-display font-bold transition-all duration-200"
                   style={
                     activeCategory === key
@@ -2222,6 +2235,32 @@ export default function ExercisesPage() {
           )}
         </AnimatePresence>
       </main>
+
+      {/* Fat Loss Ad Gate */}
+      <RewardedAdModal
+        open={fatLossAdOpen}
+        onComplete={() => {
+          setFatLossUnlocked(true);
+          setFatLossAdOpen(false);
+          setActiveCategory("fatloss");
+        }}
+        onCancel={() => setFatLossAdOpen(false)}
+        title="Unlock Fat Loss Workouts"
+        description="Watch a short ad to unlock Fat Loss workout plans"
+      />
+
+      {/* Yoga Ad Gate */}
+      <RewardedAdModal
+        open={yogaAdOpen}
+        onComplete={() => {
+          setYogaUnlocked(true);
+          setYogaAdOpen(false);
+          setActiveCategory("yoga");
+        }}
+        onCancel={() => setYogaAdOpen(false)}
+        title="Unlock Yoga Workouts"
+        description="Watch a short ad to unlock Yoga workout plans"
+      />
 
       {/* Log Session Modal */}
       <Dialog open={logModalOpen} onOpenChange={setLogModalOpen}>

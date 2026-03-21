@@ -28,7 +28,7 @@ const MOTION_THRESH = 6;
 const STABLE_FRAMES = 4;
 const MIN_REP_MS = 700;
 const PHASE_HYSTERESIS = 0.1;
-const IDLE_FRAMES_REQUIRED = 50;
+const IDLE_FRAMES_REQUIRED = 25;
 
 interface MotionState {
   prevGray: Uint8Array | null;
@@ -105,7 +105,7 @@ function analyseFrame(
     // --- inPosition gate ---
     if (!state.inPosition) {
       const avgMotionPerRow = motionSum / SAMPLE_ROWS;
-      if (avgMotionPerRow < 0.5) {
+      if (avgMotionPerRow < 1.5) {
         state.stableIdleFrames += 1;
       } else {
         state.stableIdleFrames = 0;
@@ -211,6 +211,7 @@ export default function PushUpCounterPage() {
   const [manualPulse, setManualPulse] = useState(false);
 
   const rafRef = useRef<number | null>(null);
+  const frameCount = useRef(0);
   const offscreenRef = useRef<HTMLCanvasElement | null>(null);
   const offscreenCtxRef = useRef<CanvasRenderingContext2D | null>(null);
   const motionStateRef = useRef<MotionState>(makeMotionState());
@@ -247,8 +248,18 @@ export default function PushUpCounterPage() {
       motionStateRef.current,
     );
 
-    setIsInPosition(motionStateRef.current.inPosition);
-    setPhase(newPhase);
+    frameCount.current++;
+    if (frameCount.current % 2 !== 0) {
+      rafRef.current = requestAnimationFrame(detectLoop);
+      return;
+    }
+
+    setIsInPosition((prev) =>
+      prev !== motionStateRef.current.inPosition
+        ? motionStateRef.current.inPosition
+        : prev,
+    );
+    setPhase((prev) => (prev !== newPhase ? newPhase : prev));
 
     if (repCounted) {
       setCount((c) => c + 1);
